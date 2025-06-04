@@ -1,0 +1,56 @@
+openapi: 3.1.0
+info:
+  title: EC2 Shell Executor
+  version: 1.0.0
+  description: Execute shell commands on a remote EC2 instance securely.
+servers:
+  - url: https://shell.gleixner.xyz
+paths:
+  /execute:
+    post:
+      x-openai-isConsequential: false
+      operationId: runCommand
+      summary: Execute a shell command
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandRequest'
+      responses:
+        '200':
+          description: Command execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    CommandRequest:
+      type: object
+      properties:
+        command:
+          type: string
+          description: The shell command to execute
+      required:
+        - command
+    CommandResponse:
+      type: object
+      properties:
+        stdout:
+          type: string
+          description: Standard output from the command
+        stderr:
+          type: string
+          description: Standard error from the command
+        exit_code:
+          type: integer
+          description: Exit code of the command
+
+
