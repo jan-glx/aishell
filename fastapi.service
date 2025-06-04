@@ -1,0 +1,15 @@
+[Unit]
+Description=FastAPI Service
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu
+Environment="API_TOKEN=ghp_f9N7rjJb2aXuZtQ3sWp8HdVs6MkPgYZL"
+Environment="PYTHONPATH=/home/ubuntu"
+Environment="PATH=/home/ubuntu/ec2-shell-env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+ExecStart=/home/ubuntu/ec2-shell-env/bin/python -m uvicorn api:app --host 0.0.0.0 --port 8000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
