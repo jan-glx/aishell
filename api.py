@@ -22,6 +22,7 @@ def execute_command(request: CommandRequest, authorization: str = Header(None)):
     try:
         result = subprocess.run(
             request.command,
+            executable="/bin/bash",
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
