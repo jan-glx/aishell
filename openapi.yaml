@@ -6,6 +6,74 @@ info:
 servers:
   - url: https://shell.gleixner.xyz
 paths:
+  /transfer:
+    post:
+      operationId: transferFile
+      summary: Process files sent by the GPT
+      description: Accepts files from the user and stores them on the server.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                openaiFileIdRefs:
+                  type: array
+                  description: Files to store. May include up to 10 elements.
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      id:
+                        type: string
+                      mime_type:
+                        type: string
+                      download_link:
+                        type: string
+                        format: uri
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  urls:
+                    type: array
+                    items:
+                      type: string
+                      format: uri
+
+  /download:
+    get:
+      operationId: getFile
+      summary: Retrieve a previously uploaded file
+      description: Returns a file from the output directory
+      parameters:
+        - name: filename
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  openaiFileResponse:
+                    type: array
+                    items:
+                      type: string
+                      format: uri
+
   /execute:
     post:
       x-openai-isConsequential: false
@@ -26,6 +94,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommandResponse'
+
+  /tmux/{session}:
+    get:
+      x-openai-isConsequential: false
+      operationId: read_tmux_buffer
+      summary: Read tmux buffer
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: session
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful read
+        '404':
+          description: Session not found
+
+  /tmux/{session}/send:
+    post:
+      x-openai-isConsequential: false
+      operationId: send_tmux_keys
+      summary: Send input to tmux session
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: session
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: input
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Input sent
+        '404':
+          description: Session not found
+
 components:
   securitySchemes:
     bearerAuth:
@@ -52,5 +164,3 @@ components:
         exit_code:
           type: integer
           description: Exit code of the command
-
-

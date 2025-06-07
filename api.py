@@ -6,9 +6,11 @@ from pathlib import Path
 import subprocess
 import os
 from app.routes import upload
+from app.routes import tmux
 
 app = FastAPI()
 app.include_router(upload.router)
+app.include_router(tmux.router)
 
 API_TOKEN = os.getenv("API_TOKEN", "supersecret")  # Set this securely in env
 
@@ -41,3 +43,9 @@ app.mount("/form", StaticFiles(directory=str(Path(__file__).parent), html=True),
 @app.get("/upload-form", response_class=HTMLResponse)
 def upload_form():
     return (Path(__file__).parent / "app" / "upload_form.html").read_text()
+
+#exec(open(str(Path.home() / 'transfer_endpoint.py')).read())
+
+exec(open(str(Path.home() / 'transfer_openai.py')).read())
+
+exec(open(str(Path.home() / 'download_endpoint.py')).read())
