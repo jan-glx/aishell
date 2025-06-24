@@ -12,8 +12,8 @@ cd aishell
 It is recommended to use a virtual environment:
 
 ```bash
-python -m venv venv
-source venv/bin/activate
+python -m venv venv-aishell
+source venv-aishell/bin/activate
 pip install -e .
 ```
 
@@ -25,7 +25,6 @@ This installs the package in editable mode, so changes in the source code are re
 
 ### 1. Environment Configuration
 
-\
 Edit the `.env` file in the project root to set your domain and API token:
 
 ```
@@ -34,17 +33,17 @@ YOUR_DOMAIN=example.com
 API_TOKEN=supersecret
 ```
 
-Adjust the values as needed for your deployment. This file is used by both the application and t
+Adjust the values as needed for your deployment. This file is used by both the application and the deployment process.
 
 ### 2. **Systemd Service**
 
-Edit `deploy/fastapi.service` to match your system paths and environment variables, then:
+Edit `deploy/aishell.service` to match your system paths and environment variables, then:
 
 ```bash
-sudo cp deploy/fastapi.service /etc/systemd/system/
+sudo cp deploy/aishell.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable fastapi
-sudo systemctl start fastapi
+sudo systemctl enable aishell
+sudo systemctl start aishell
 ```
 
 ### 3. **NGINX Config**
