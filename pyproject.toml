@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aishell"
+version = "0.1.0"
+description = "Shell-based FastAPI interface for EC2"
+authors = [
+  { name="Jan Gleixner" }
+]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "pydantic",
+  "python-multipart",
+  "boto3",
+  "paramiko",
+  "requests"
+]
+aishell = "aishell.__main__:app"
