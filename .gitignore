@@ -2,3 +2,4 @@ output/
 ec2-shell-env/
 __pycache__/
 .env
+aishell.egg-info/

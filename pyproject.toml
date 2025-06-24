@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aishell"
 version = "0.1.0"
-description = "Shell-based FastAPI interface for EC2"
+description = "FastAPI based shell interface for use with AI agents"
 authors = [
   { name="Jan Gleixner" }
 ]
@@ -20,4 +20,7 @@ dependencies = [
   "paramiko",
   "requests"
 ]
-aishell = "aishell.__main__:app"
+
+[tool.setuptools]
+packages = ["aishell"]
+
