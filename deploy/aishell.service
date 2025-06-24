@@ -6,9 +6,8 @@ After=network.target
 User=ubuntu
 WorkingDirectory=/home/ubuntu/aishell
 Environment="API_TOKEN=ghp_f9N7rjJb2aXuZtQ3sWp8HdVs6MkPgYZL"
-Environment="
-Environment="PATH=/home/ubuntu/ec2-shell-env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
-ExecStart=/home/ubuntu/venv-aishell/bin/python -m uvicorn aishell.aishell:app --host 0.0.0.0 --port 8000
+Environment="PATH=/home/ubuntu/venv-aishell/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+ExecStart=/home/ubuntu/venv-aishell/bin/python -m uvicorn aishell:app --host 0.0.0.0 --port 8000
 Restart=always
 
 [Install]

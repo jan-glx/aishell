@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from pathlib import Path
 import subprocess
 import os
-from .routes import upload, tmux, transfer_openai, transfer_endpoint, download_endpoint
+from .routes import upload, tmux, transfer_openai, transfer_endpoint, download_endpoint, execute
 
 app = FastAPI()
 app.include_router(upload.router)
@@ -19,3 +19,4 @@ class CommandRequest(BaseModel):
 app.include_router(transfer_openai.router)
 app.include_router(transfer_endpoint.router)
 app.include_router(download_endpoint.router)
+app.include_router(execute.router)
