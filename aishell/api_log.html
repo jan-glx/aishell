@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>API Log Viewer</title>
+  <style>
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ddd; padding: 8px; vertical-align: top; }
+    th { background-color: #f2f2f2; }
+    pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; }
+  </style>
+</head>
+<body>
+  <h1>API Log Viewer</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>Timestamp</th>
+        <th>Method</th>
+        <th>Path</th>
+        <th>Client IP</th>
+        <th>Status Code</th>
+        <th>Input</th>
+        <th>Output</th>
+      </tr>
+    </thead>
+    <tbody id="log-entries"></tbody>
+  </table>
+
+  <script>
+    fetch('api_log.jsonl')
+      .then(response => response.text())
+      .then(text => {
+        const tbody = document.getElementById('log-entries');
+        text.trim().split('\n').forEach(line => {
+          const entry = JSON.parse(line);
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${entry.timestamp}</td>
+            <td>${entry.method}</td>
+            <td>${entry.path}</td>
+            <td>${entry.client_ip}</td>
+            <td>${entry.status_code}</td>
+            <td><pre>${entry.input || ''}</pre></td>
+            <td><pre>${entry.output || ''}</pre></td>
+          `;
+          tbody.appendChild(row);
+        });
+      });
+  </script>
+</body>
+</html>
+

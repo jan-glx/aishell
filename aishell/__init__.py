@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Header
+from .logging_middleware import LoggingMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -8,6 +9,7 @@ import os
 from .routes import upload, tmux, transfer_openai, transfer_endpoint, download_endpoint, execute
 
 app = FastAPI()
+app.add_middleware(LoggingMiddleware)
 app.include_router(upload.router)
 app.include_router(tmux.router)
 
