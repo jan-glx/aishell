@@ -1,10 +1,25 @@
+
+-include .env
+export
+
 .PHONY: setup deploy-service deploy-openapi deploy-nginx deploy test-service test
 
-setup:
-	python -m venv ../venv-aishell
-	../venv-aishell/bin/pip install --upgrade pip wheel
-	../venv-aishell/bin/pip install -e .
+deploy: deploy-service deploy-openapi deploy-nginx
 
+setup: venv
+
+venv: ../venv-aishell/touchfile
+
+PYTHON=../venv-aishell/bin/python
+
+$(PYTHON):
+	virtualenv create ../venv-aishell
+
+../venv-aishell/touchfile: $(PTHON)
+	$(PYTHON) -m pip install --upgrade pip wheel
+	$(PYTHON) -m pip install .
+	touch ../venv-aishell/touchfile
+	
 deploy-service:
 	sudo cp deploy/aishell.service /etc/systemd/system/
 	sudo systemctl daemon-reload
@@ -12,17 +27,21 @@ deploy-service:
 	sudo systemctl restart aishell
 
 deploy-openapi:
-	sudo mkdir -p /var/www/$$YOUR_DOMAIN
-	sudo ln -sf $$(realpath deploy/openapi.yaml) /var/www/$$YOUR_DOMAIN/openapi.yaml
+	sudo mkdir -p /var/www/$(YOUR_DOMAIN)
+	sudo cp deploy/openapi.yaml /var/www/$(YOUR_DOMAIN)/openapi.yaml
 
 deploy-nginx:
-	envsubst < deploy/nginx-template.conf > /etc/nginx/sites-available/$$YOUR_DOMAIN.conf
-	sudo ln -sf /etc/nginx/sites-available/$$YOUR_DOMAIN.conf /etc/nginx/sites-enabled/
+	envsubst < deploy/nginx-template.conf | sudo tee /etc/nginx/sites-available/$(YOUR_DOMAIN) > /dev/null
+	sudo ln -sf /etc/nginx/sites-available/$(YOUR_DOMAIN) /etc/nginx/sites-enabled/
 	sudo nginx -t && sudo systemctl reload nginx
 
-deploy: deploy-service deploy-openapi deploy-nginx
 
-test-service:
-	. ../venv-aishell/bin/activate && uvicorn aishell:app --host 0.0.0.0 --port 8002
+test-syntax: ../venv-aishell/touchfile
+	$(PYTHON) -c "import aishell"
 
-test: test-service
+test-uvicornapp: ../venv-aishell/touchfile
+	(timeout 6 $(PYTHON) -m uvicorn aishell:app --host 0.0.0.0 --port 8002) & 
+	sleep 3 && curl --fail http://localhost:8002/execute || (sleep 5 ; fail)
+
+
+test: test-service test-uvicornapp
