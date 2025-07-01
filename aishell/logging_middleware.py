@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from datetime import datetime
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -8,7 +9,7 @@ from starlette.types import Message
 
 logger = logging.getLogger("api_logger")
 logger.setLevel(logging.INFO)
-handler = logging.FileHandler("api_log.jsonl")
+handler = logging.FileHandler(os.path.expanduser("~/.api_log.jsonl"))
 logger.addHandler(handler)
 
 class LoggingMiddleware(BaseHTTPMiddleware):
