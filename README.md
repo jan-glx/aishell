@@ -29,12 +29,13 @@ This installs the package in editable mode, so changes in the source code are re
 
 ### 1. Environment Configuration
 
-Edit the `.env` file in the project root to specify your domain and come up with an API token:
+Create a `.env` file in the project root to specify your domain and come up with an API token:
 
 ```
-# .env
+cat <<EOF > aishell/.env
 YOUR_DOMAIN=example.com
 API_TOKEN=supersecret
+EOF
 ```
 
 Adjust the values as needed for your deployment. This file is used by both the application and the deployment process.
