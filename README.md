@@ -28,7 +28,7 @@ Configure ngix and setup a service (systemd)
 sudo make deploy
 ```
 
-## 🤖 Setting Up a Custom GPT with OpenAI
+### 🤖 Setting Up a Custom GPT with OpenAI
 
 1. Visit [platform.openai.com/gpts](https://platform.openai.com/gpts)
 2. Click "Create a GPT"
