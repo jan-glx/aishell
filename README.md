@@ -1,3 +1,8 @@
+# aishell
+A Root shell backend for your AI Chatbot 
+## Prerequisite:
+A root server and a domain pointing to it.
+
 ## 🚀 Installation
 
 ### 1. **Clone the Repository**
@@ -24,7 +29,7 @@ This installs the package in editable mode, so changes in the source code are re
 
 ### 1. Environment Configuration
 
-Edit the `.env` file in the project root to set your domain and API token:
+Edit the `.env` file in the project root to specify your domain and come up with an API token:
 
 ```
 # .env
