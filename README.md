@@ -5,78 +5,28 @@ A root server and a domain pointing to it.
 
 ## 🚀 Installation
 
-### 1. **Clone the Repository**
+### **Clone the Repository**
 
-```bash
+```sh
 git clone https://github.com/jan-glx/aishell.git
 ```
 
-### 2. **Install the Python Package**
-
-It is recommended to use a virtual environment:
-
-```bash
-python -m venv venv-aishell
-source venv-aishell/bin/activate
-pip install -e aishell
-```
-
-This installs the package in editable mode, so changes in the source code are reflected without reinstalling.
-
----
-
-## ⚙️ Deployment
-
-### 1. Environment Configuration
+### Configuration
 
 Create a `.env` file in the project root to specify your domain and come up with an API token:
 
-```
+```bash
 cat <<EOF > aishell/.env
 YOUR_DOMAIN=example.com
 API_TOKEN=supersecret
 EOF
 ```
 
-Adjust the values as needed for your deployment. This file is used by both the application and the deployment process.
-
-### 2. **Systemd Service**
-
-Edit `deploy/aishell.service` to match your system paths and environment variables, then:
-
-```bash
-sudo cp deploy/aishell.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable aishell
-sudo systemctl start aishell
+### Setup and Deploy
+Configure ngix and setup a service (systemd)
+```sh
+sudo make deploy
 ```
-
-### 3. **NGINX Config**
-
-Template `deploy/nginx-template.conf` by replacing `${YOUR_DOMAIN}` with your actual domain:
-
-```bash
-envsubst < deploy/nginx-template.conf > /etc/nginx/sites-available/${YOUR_DOMAIN}.conf
-sudo ln -s /etc/nginx/sites-available/${YOUR_DOMAIN}.conf /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-### 4. **Host the OpenAPI Spec**
-
-Ensure `deploy/openapi.yaml` is available publicly at:
-
-```
-https://${YOUR_DOMAIN}/openapi.yaml
-```
-
-To serve this directly from your repo (editable):
-
-```bash
-sudo mkdir -p /var/www/${YOUR_DOMAIN}
-sudo ln -sf $(realpath deploy/openapi.yaml) /var/www/${YOUR_DOMAIN}/openapi.yaml
-```
-
----
 
 ## 🤖 Setting Up a Custom GPT with OpenAI
 
