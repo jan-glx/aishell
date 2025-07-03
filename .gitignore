@@ -5,3 +5,4 @@ __pycache__/
 aishell.egg-info/
 build/
 
+.env
