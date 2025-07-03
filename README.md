@@ -4,7 +4,6 @@
 
 ```bash
 git clone https://github.com/jan-glx/aishell.git
-cd aishell
 ```
 
 ### 2. **Install the Python Package**
@@ -14,7 +13,7 @@ It is recommended to use a virtual environment:
 ```bash
 python -m venv venv-aishell
 source venv-aishell/bin/activate
-pip install -e .
+pip install -e aishell
 ```
 
 This installs the package in editable mode, so changes in the source code are reflected without reinstalling.
@@ -51,7 +50,6 @@ sudo systemctl start aishell
 Template `deploy/nginx-template.conf` by replacing `${YOUR_DOMAIN}` with your actual domain:
 
 ```bash
-export YOUR_DOMAIN=example.com
 envsubst < deploy/nginx-template.conf > /etc/nginx/sites-available/${YOUR_DOMAIN}.conf
 sudo ln -s /etc/nginx/sites-available/${YOUR_DOMAIN}.conf /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
