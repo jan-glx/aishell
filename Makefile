@@ -2,9 +2,9 @@
 -include .env
 export
 
-.PHONY: setup venv deploy-service deploy-openapi deploy-nginx deploy test-service test
+.PHONY: setup venv deploy-service deploy-openapi deploy-nginx deploy test-service test build
 
-deploy: setup deploy-service deploy-openapi deploy-nginx
+deploy: setup build deploy-service deploy-openapi deploy-nginx
 
 setup: venv
 
@@ -15,25 +15,37 @@ PYTHON=../venv-aishell/bin/python
 $(PYTHON):
 	python3 -m venv ../venv-aishell
 
-../venv-aishell/touchfile: $(PYTHON)
+../venv-aishell/touchfile: $(PYTHON) aishell/*.py
 	$(PYTHON) -m pip install  --no-warn-script-location --upgrade pip wheel
-	$(PYTHON) -m pip install .
 	touch ../venv-aishell/touchfile
 	
-deploy-service:
-	sudo cp deploy/aishell.service /etc/systemd/system/
+	
+build: ../venv-aishell/touchfile
+	$(PYTHON) -m pip install .
+
+deploy-service: /etc/systemd/system/aishell.service
 	sudo systemctl daemon-reload
 	sudo systemctl enable aishell
-	sudo systemctl restart aishell
+	sudo systemctl stop aishell
+	sudo systemctl start aishell
+	sudo systemctl status aishell
 
-deploy-openapi:
+
+/etc/systemd/system/aishell.service: deploy/aishell.service
+	envsubst < deploy/aishell.service | sudo tee /etc/systemd/system/aishell.service > /dev/null
+
+deploy-openapi: /var/www/$(YOUR_DOMAIN)/openapi.yaml
+
+/var/www/$(YOUR_DOMAIN)/openapi.yaml: deploy/openapi.yaml 
 	sudo mkdir -p /var/www/$(YOUR_DOMAIN)
 	envsubst < deploy/openapi.yaml | sudo tee /var/www/$(YOUR_DOMAIN)/openapi.yaml > /dev/null
 
-deploy-nginx:
+deploy-nginx: /etc/nginx/sites-available/$(YOUR_DOMAIN) /etc/nginx/sites-available/$(YOUR_DOMAIN)
+	sudo nginx -t && sudo systemctl reload nginx
+
+/etc/nginx/sites-enabled/$(YOUR_DOMAIN) /etc/nginx/sites-available/$(YOUR_DOMAIN): deploy/nginx-template.conf
 	envsubst < deploy/nginx-template.conf | sudo tee /etc/nginx/sites-available/$(YOUR_DOMAIN) > /dev/null
 	sudo ln -sf /etc/nginx/sites-available/$(YOUR_DOMAIN) /etc/nginx/sites-enabled/
-	sudo nginx -t && sudo systemctl reload nginx
 
 
 test-syntax: ../venv-aishell/touchfile
