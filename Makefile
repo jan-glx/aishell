@@ -28,7 +28,7 @@ deploy-service:
 
 deploy-openapi:
 	sudo mkdir -p /var/www/$(YOUR_DOMAIN)
-	sudo cp deploy/openapi.yaml /var/www/$(YOUR_DOMAIN)/openapi.yaml
+	envsubst < deploy/openapi.yaml | sudo tee /var/www/$(YOUR_DOMAIN)/openapi.yaml > /dev/null
 
 deploy-nginx:
 	envsubst < deploy/nginx-template.conf | sudo tee /etc/nginx/sites-available/$(YOUR_DOMAIN) > /dev/null
