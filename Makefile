@@ -2,9 +2,9 @@
 -include .env
 export
 
-.PHONY: setup deploy-service deploy-openapi deploy-nginx deploy test-service test
+.PHONY: setup venv deploy-service deploy-openapi deploy-nginx deploy test-service test
 
-deploy: deploy-service deploy-openapi deploy-nginx
+deploy: setup deploy-service deploy-openapi deploy-nginx
 
 setup: venv
 
@@ -13,10 +13,10 @@ venv: ../venv-aishell/touchfile
 PYTHON=../venv-aishell/bin/python
 
 $(PYTHON):
-	virtualenv create ../venv-aishell
+	python3 -m venv ../venv-aishell
 
-../venv-aishell/touchfile: $(PTHON)
-	$(PYTHON) -m pip install --upgrade pip wheel
+../venv-aishell/touchfile: $(PYTHON)
+	$(PYTHON) -m pip install  --no-warn-script-location --upgrade pip wheel
 	$(PYTHON) -m pip install .
 	touch ../venv-aishell/touchfile
 	
