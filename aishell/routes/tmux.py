@@ -1,3 +1,4 @@
+from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException
 import subprocess
 
@@ -22,14 +23,18 @@ def read_tmux_buffer(session: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+class InputModel(BaseModel):
+    input: list[str]
+
 @router.post("/tmux/{session}/send")
-def send_tmux_keys(session: str, input: str):
+def send_tmux_keys(session: str, body: InputModel):
     try:
         ensure_tmux_session(session)
         subprocess.run(
-            ["tmux", "send-keys", "-t", session, input, "C-m"],
+            ["tmux", "send-keys", "-t", session, *body.input],
             check=True
         )
-        return {"status": "sent", "input": input}
+        return {"status": "sent", "input": body.input}
     except subprocess.CalledProcessError as e:
         raise HTTPException(status_code=404, detail=str(e))
