@@ -40,8 +40,20 @@ test-syntax: ../venv-aishell/touchfile
 	$(PYTHON) -c "import aishell"
 
 test-uvicornapp: ../venv-aishell/touchfile
-	(timeout 6 $(PYTHON) -m uvicorn aishell:app --host 0.0.0.0 --port 8002) & 
-	sleep 3 && curl --fail http://localhost:8002/execute || (sleep 5 ; fail)
-
+	timeout 6 $(PYTHON) -m uvicorn aishell:app --host 0.0.0.0 --port 8002 & \
+	server_pid=$$! ; \
+	( \
+		for i in 1 2 3 4 5 ; do \
+			curl -s http://localhost:8002/docs > /dev/null && break ; \
+			sleep 1 ; \
+		done ; \
+		resp=$$(curl --fail -X POST \
+			-H "Authorization: Bearer $${API_TOKEN}" \
+			-H "Content-Type: application/json" \
+			-d '{"command":"echo Hello Jan"}' \
+			http://localhost:8002/execute) ; \
+		echo "$$resp" | grep -q "Hello Jan" || (echo "Test failed, response:" ; echo "$$resp" ; kill $$server_pid ; false) ; \
+		kill $$server_pid \
+	)
 
 test: test-service test-uvicornapp
