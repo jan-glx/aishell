@@ -21,6 +21,5 @@ dependencies = [
   "requests"
 ]
 
-[tool.setuptools]
-packages = ["aishell"]
-
+[tool.setuptools.packages.find]
+where = ["."]
