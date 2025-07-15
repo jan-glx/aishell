@@ -4,7 +4,7 @@ from pathlib import Path
 
 router = APIRouter()
 
-OUTPUT_DIR = Path("/root/uploads")
+OUTPUT_DIR = Path.home() / "uploads"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 API_TOKEN = os.getenv("API_TOKEN", "")
