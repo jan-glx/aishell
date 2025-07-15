@@ -4,7 +4,7 @@ export
 
 .PHONY: setup venv deploy-service deploy-openapi deploy-nginx deploy test-service test build
 
-deploy: setup build deploy-service deploy-openapi deploy-nginx
+deploy: setup build deploy-service deploy-openapi deploy-static deploy-nginx
 
 setup: venv
 
@@ -34,6 +34,10 @@ deploy-service: /etc/systemd/system/aishell.service
 /etc/systemd/system/aishell.service: deploy/aishell.service
 	envsubst < deploy/aishell.service | sudo tee /etc/systemd/system/aishell.service > /dev/null
 
+
+deploy-static:
+	mkdir -p /var/www/$(YOUR_DOMAIN)/static
+	cp aishell/*.html /var/www/$(YOUR_DOMAIN)/static/
 deploy-openapi: /var/www/$(YOUR_DOMAIN)/openapi.yaml
 
 /var/www/$(YOUR_DOMAIN)/openapi.yaml: deploy/openapi.yaml 
