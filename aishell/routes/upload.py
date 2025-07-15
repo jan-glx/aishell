@@ -4,7 +4,7 @@ from pathlib import Path
 
 router = APIRouter()
 
-OUTPUT_DIR = Path.home() / "output"
+OUTPUT_DIR = Path("/root/uploads")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 API_TOKEN = os.getenv("API_TOKEN", "")
@@ -18,4 +18,4 @@ async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
     with file_path.open("wb") as buffer:
         content = await file.read()
         buffer.write(content)
-    return {"filename": file.filename, "url": f"https://shell.gleixner.xyz/output/{file.filename}"}
+    return {"filename": file.filename, "url": f"https://aishell.gleixner.xyz/uploads/{file.filename}"}
