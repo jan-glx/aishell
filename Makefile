@@ -91,3 +91,10 @@ test-deployed: /etc/systemd/system/aishell.service
 		echo "$$resp" | grep -q "Hello Jan" || (echo "Test failed, response:" ; echo "$$resp" ; false) ; 
 
 test: test-service test-uvicornapp
+
+.PHONY: status
+status:
+	@echo "\n[NGINX STATUS]" && systemctl status nginx --no-pager
+	@echo "\n[NGINX LOGS]" && journalctl -u nginx --no-pager -n 30
+	@echo "\n[FASTAPI STATUS - aishell]" && systemctl status aishell --no-pager
+	@echo "\n[FASTAPI LOGS - aishell]" && journalctl -u aishell --no-pager -n 30
