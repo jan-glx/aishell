@@ -118,7 +118,7 @@ paths:
     post:
       x-openai-isConsequential: false
       operationId: send_tmux_keys
-      summary: Send input to tmux session
+      summary: Send input to tmux session and reads the tmux_buffer
       security:
         - bearerAuth: []
       parameters:
@@ -140,7 +140,7 @@ paths:
                     type: string
               required:
                 - input
-              description: List of key strings to send to tmux (e.g., ["Escape", ":q", "Enter"] to exit vim). In the rare case you need a key name literally, split them up (e.g. ["Esca", "pe"] instead of ["Escape"]).
+              description: List of key strings to send to tmux (e.g., ["Escape", ":q", "Enter"] to exit vim, ["C-x"] to exit nano or ["Up", "Enter"] to run the previous command). In the rare case you need a key name literally, split them up (e.g. ["Esca", "pe"] instead of ["Escape"]).
       responses:
         '200':
           description: Input sent
