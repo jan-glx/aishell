@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+	<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <meta charset="UTF-8">
   <title>API Log Viewer</title>
   <style>
@@ -11,6 +12,7 @@
   </style>
 </head>
 <body>
+  <label for="token">Bearer Token:</label> <input type="text" id="token" placeholder="Enter token" style="width:400px;"><br><br>
   <h1>API Log Viewer</h1>
   <table>
     <thead>
@@ -27,27 +29,53 @@
     <tbody id="log-entries"></tbody>
   </table>
 
-  <script>
-    fetch('api_log.jsonl')
-      .then(response => response.text())
-      .then(text => {
-        const tbody = document.getElementById('log-entries');
-        text.trim().split('\n').forEach(line => {
-          const entry = JSON.parse(line);
-          const row = document.createElement('tr');
-          row.innerHTML = `
-            <td>${entry.timestamp}</td>
-            <td>${entry.method}</td>
-            <td>${entry.path}</td>
-            <td>${entry.client_ip}</td>
-            <td>${entry.status_code}</td>
-            <td><pre>${entry.input || ''}</pre></td>
-            <td><pre>${entry.output || ''}</pre></td>
-          `;
-          tbody.appendChild(row);
-        });
-      });
-  </script>
+<script>
+async function loadApiLog() {
+  const token = localStorage.getItem("bearerToken");
+  if (!token) return;
+  const response = await fetch("/api/log", {
+    headers: { Authorization: "Bearer " + token }
+  });
+  const tbody = document.getElementById("log-entries");
+  tbody.innerHTML = "";
+  if (response.ok) {
+    const text = await response.text();
+    text.trim().split("\n").forEach(line => {
+      const entry = JSON.parse(line);
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${entry.timestamp}</td>
+        <td>${entry.method}</td>
+        <td>${entry.path}</td>
+        <td>${entry.client_ip}</td>
+        <td>${entry.status_code}</td>
+        <td><pre>${entry.input || ''}</pre></td>
+        <td><pre>${entry.output || ''}</pre></td>
+      `;
+      tbody.appendChild(row);
+    });
+  } else {
+    tbody.innerHTML = `<tr><td colspan='7'>Failed to load log: ${response.status}</td></tr>`;
+  }
+}
+
+window.onload = function () {
+  const tokenField = document.getElementById("token");
+  const savedToken = localStorage.getItem("bearerToken");
+  if (savedToken) tokenField.value = savedToken;
+  else {
+    const userToken = prompt("Enter your Bearer token:");
+    if (userToken) {
+      localStorage.setItem("bearerToken", userToken);
+      tokenField.value = userToken;
+    }
+  }
+  tokenField.addEventListener("input", () => {
+    localStorage.setItem("bearerToken", tokenField.value);
+    loadApiLog();
+  });
+  loadApiLog();
+};
+</script>
 </body>
 </html>
-

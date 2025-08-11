@@ -38,6 +38,7 @@ deploy-service: /etc/systemd/system/aishell.service
 deploy-static:
 	mkdir -p /var/www/$(YOUR_DOMAIN)/static
 	cp aishell/*.html /var/www/$(YOUR_DOMAIN)/static/
+	cp aishell/favicon.svg /var/www/${YOUR_DOMAIN}/static/
 deploy-openapi: /var/www/$(YOUR_DOMAIN)/openapi.yaml
 
 /var/www/$(YOUR_DOMAIN)/openapi.yaml: deploy/openapi.yaml 
