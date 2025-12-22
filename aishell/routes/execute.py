@@ -15,10 +15,18 @@ def execute_command(request: CommandRequest, authorization: str = Header(None)):
     if authorization != f"Bearer {API_TOKEN}":
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
-        result = subprocess.run(["bash", "-l", "-c", request.command],
+        env = {**os.environ,
+            "HOME": os.environ.get("HOME", "/root"),
+            "USER": os.environ.get("USER", "root"),
+            "LOGNAME": os.environ.get("LOGNAME", "root"),
+            "TMPDIR": os.environ.get("TMPDIR", "/tmp")
+        }
+        result = subprocess.run(
+            ["bash", "-l", "-c", request.command],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            env=env
         )
         return {
             "stdout": result.stdout,
