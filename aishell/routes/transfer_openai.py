@@ -34,16 +34,25 @@ def transfer_file(data: TransferRequest, authorization: str = Header(None)):
 
     file_ids = []
     for f in data.openaiFileIdRefs:
-        r = requests.get(f.download_link, timeout=10)
-        if r.status_code == 200:
-            file_path = output_path / f.name
-            with open(file_path, "wb") as out_file:
-                out_file.write(r.content)
+        print("Starting upload for", f.name)
+        try:
+            r = requests.get(f.download_link, timeout=10)
+            r.raise_for_status()
+        except Exception as e:
+            print(f"Download failed for {f.name}: {e}")
+            raise HTTPException(status_code=502, detail=f"Download failed: {f.name}")
 
+        file_path = output_path / f.name
+        with open(file_path, "wb") as out_file:
+            out_file.write(r.content)
+
+        try:
             with open(file_path, "rb") as upload_file:
                 result = client.files.create(file=upload_file, purpose="assistants")
                 file_ids.append(result.id)
-        else:
-            raise HTTPException(status_code=502, detail=f"Download failed: {f.name}")
+        except Exception as e:
+            print(f"Upload failed for {file_path}: {e}")
+            continue
 
     return {"file_ids": file_ids}
+
