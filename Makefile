@@ -4,7 +4,7 @@ export
 
 .PHONY: setup venv deploy-service deploy-openapi deploy-nginx deploy test-service test build
 
-deploy: setup build deploy-service deploy-openapi deploy-static deploy-nginx
+deploy: setup build deploy-service deploy-openapi deploy-static deploy-nginx deploy-logrotate
 
 setup: venv
 	LOG_DIR=/var/log/aishell
@@ -105,3 +105,13 @@ status:
 .PHONEY: redeploy
 redeploy:
 	echo "cd $PWD && sleep 3 && /usr/bin/make deploy > ~/output/deploy.log 2>&1" | at now
+
+deploy-logrotate:
+	echo "/var/log/aishell/api_log.jsonl {" | sudo tee /etc/logrotate.d/aishell > /dev/null
+	echo "    size 1M" | sudo tee -a /etc/logrotate.d/aishell > /dev/null
+	echo "    rotate 5" | sudo tee -a /etc/logrotate.d/aishell > /dev/null
+	echo "    compress" | sudo tee -a /etc/logrotate.d/aishell > /dev/null
+	echo "    missingok" | sudo tee -a /etc/logrotate.d/aishell > /dev/null
+	echo "    notifempty" | sudo tee -a /etc/logrotate.d/aishell > /dev/null
+	echo "    copytruncate" | sudo tee -a /etc/logrotate.d/aishell > /dev/null
+	echo "}" | sudo tee -a /etc/logrotate.d/aishell > /dev/null
