@@ -7,6 +7,8 @@ export
 deploy: setup build deploy-service deploy-openapi deploy-static deploy-nginx
 
 setup: venv
+	LOG_DIR=/var/log/aishell
+	sudo mkdir -p $(LOG_DIR)
 
 venv: ../venv-aishell/touchfile
 

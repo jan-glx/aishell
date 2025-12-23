@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Header
 from fastapi.responses import PlainTextResponse
 import os
 router = APIRouter()
-LOG_PATH = os.path.expanduser("~/.api_log.jsonl")
+LOG_PATH = "/var/log/aishell/api_log.jsonl"
 API_TOKEN = os.getenv("API_TOKEN", "supersecret")
 def tail(filename, n=10, buf_size=1024):
     lines = []
