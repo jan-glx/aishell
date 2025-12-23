@@ -40,6 +40,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         )
 
         output_text = resp_body.decode("utf-8", errors="replace")
+        output_text = output_text[:100] + "..." + output_text[-100:] if request.url.path == "/api/log" and len(output_text) > 200 else output_text
 
         # Write log entry
         log_entry = {

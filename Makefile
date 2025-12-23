@@ -37,10 +37,12 @@ deploy-service: /etc/systemd/system/aishell.service
 	envsubst < deploy/aishell.service | sudo tee /etc/systemd/system/aishell.service > /dev/null
 
 
-deploy-static:
+deploy-static: favicon.ico
+
 	mkdir -p /var/www/$(YOUR_DOMAIN)/static
 	cp aishell/*.html /var/www/$(YOUR_DOMAIN)/static/
 	cp aishell/favicon.svg /var/www/${YOUR_DOMAIN}/static/
+	cp aishell/favicon.ico /var/www/${YOUR_DOMAIN}/static/
 deploy-openapi: /var/www/$(YOUR_DOMAIN)/openapi.yaml
 
 /var/www/$(YOUR_DOMAIN)/openapi.yaml: deploy/openapi.yaml 
@@ -115,3 +117,9 @@ deploy-logrotate:
 	echo "    notifempty" | sudo tee -a /etc/logrotate.d/aishell > /dev/null
 	echo "    copytruncate" | sudo tee -a /etc/logrotate.d/aishell > /dev/null
 	echo "}" | sudo tee -a /etc/logrotate.d/aishell > /dev/null
+
+	favicon.ico: aishell/favicon.svg
+	convert $< -define icon:auto-resize=64,48,32,16 aishell/favicon.ico
+
+favicon.ico: aishell/favicon.svg
+	convert $< -define icon:auto-resize=64,48,32,16 aishell/favicon.ico
