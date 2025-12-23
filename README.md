@@ -1,17 +1,16 @@
 
 # aishell: a shell for your AI   $~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~$   ![Aishell Logo](https://aishell.gleixner.xyz/static/favicon.svg) 
-Aishell does not add AI to your shell. Aishell provides your AI root shell access to a server you control.
+_**aishell** does not add AI to your shell. **aishell** provides your AI root shell access to a dedicated server._
 
-Run a persistent Linux server under AI’s control, with full root access, programmable APIs, and a transparent, inspectable environment. Perfect for developers, tinkerers, and AI agents that need more than a browser and a sandbox.
+**Run a persistent Linux server under AI’s control, with full root access, programmable APIs, and a transparent, inspectable environment. Perfect for developers, tinkerers, and AI agents that need more than a browser and a sandbox.**
 
 
-## Features
-- [x] **Persistent working directory and environment**  
-- [x] **Fully programmable**: Root access, unrestricted Internet access, virtualenvs, systemd services, etc.
-- [x] **GPT-native API interface**: Exposes your shell as tools inside custom GPTs  
-- [x] **Shell history & command logs**: Everything is logged (`/static/api_log.html`)  
-- [x] **File uploads & downloads**:   
-- [x] **Shared `tmux` session over SSH**: See and edit what your AI agent is doing in real time  
+
+This project provides a simple FastAPI server that exposes a few endpoints to be called from OpenAI's ChatGPT, essentially turning the chatbot into a powerfull agent. 
+In particular there are endpoints to execute commands within a temporary shell or arbitrary keystrokes within a persistent tmux session and to up- and download files.
+The user can follow the agent's actions by joing the tmux session over ssh or by observing a log of api calls at /static/api_log.html .
+This enables endless use cases and should be the only plugin/MPC you ever need.
+## Examples
 
 ## Installation
 
