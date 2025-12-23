@@ -4,7 +4,18 @@ Aishell does not add AI to your shell. Aishell provides your AI root shell acces
 
 Run a persistent Linux server under AI’s control, with full root access, programmable APIs, and a transparent, inspectable environment. Perfect for developers, tinkerers, and AI agents that need more than a browser and a sandbox.
 
-## Prerequisite:
+
+## Features
+- [x] **Persistent working directory and environment**  
+- [x] **Fully programmable**: Root access, unrestricted Internet access, virtualenvs, systemd services, etc.
+- [x] **GPT-native API interface**: Exposes your shell as tools inside custom GPTs  
+- [x] **Shell history & command logs**: Everything is logged (`/static/api_log.html`)  
+- [x] **File uploads & downloads**:   
+- [x] **Shared `tmux` session over SSH**: See and edit what your AI agent is doing in real time  
+
+## Installation
+
+### Prerequisite:
 A root-access Linux server and a domain pointing to it.
 
 You have two main setup options:
@@ -13,8 +24,6 @@ You have two main setup options:
   A Terraform module to deploy **aishell** on Amazon EC2 — includes support for **hibernation** to reduce idle-time costs.
 
 -  Alternatively, a simple shared VM (e.g. Hetzner CX or CPX) often provides better price/performance and sufficient persistence for most use cases.
-
-## Installation
 
 ### **Clone the Repository**
 
@@ -50,18 +59,3 @@ sudo make deploy
    ```
 5. OpenAI will introspect and expose available endpoints for you to wire into your GPT
 
-
-## Features
-- [x] **Persistent working directory and environment**  
-- [x] **GPT-native API interface**: Exposes your shell as tools inside custom GPTs  
-- [x] **Shell history & command logs**: Everything is logged (`~/output/api_log.htm`)  
-- [x] **File uploads & downloads**  
-- [x] **Shared `tmux` session over SSH**: See and edit what your AI agent is doing in real time  
-- [x] **Fully programmable**: Root access, unrestricted Internet access, virtualenvs, systemd services, etc.
-
-
-### Planned / Missing
-
-- [ ] **Unprivileged shell execution**: Currently runs as root — sandboxing not yet implemented  
-- [ ] **Web-based sudo command authorization**: No prompt/approval interface yet  
-- [ ] **Multi-user support**: Single user/session model for now  
