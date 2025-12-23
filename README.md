@@ -1,5 +1,5 @@
 
-# aishell: a shell for your AI   $~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~$   ![Aishell Logo](https://aishell.gleixner.xyz/static/favicon.svg) 
+# aishell: a shell for your AI   $~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~$   ![Aishell Logo](https://aishell.gleixner.xyz/static/favicon.svg) 
 Aishell does not add AI to your shell. Aishell provides your AI root shell access to a server you control.
 
 Run a persistent Linux server under AI’s control, with full root access, programmable APIs, and a transparent, inspectable environment. Perfect for developers, tinkerers, and AI agents that need more than a browser and a sandbox.
