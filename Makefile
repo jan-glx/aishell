@@ -99,3 +99,7 @@ status:
 	@echo "\n[NGINX LOGS]" && journalctl -u nginx --no-pager -n 30
 	@echo "\n[FASTAPI STATUS - aishell]" && systemctl status aishell --no-pager
 	@echo "\n[FASTAPI LOGS - aishell]" && journalctl -u aishell --no-pager -n 30
+
+.PHONEY: redeploy
+redeploy:
+	echo "cd $PWD && sleep 3 && /usr/bin/make deploy > ~/output/deploy.log 2>&1" | at now
