@@ -1,71 +1,98 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <meta charset="UTF-8">
   <title>API Log Viewer</title>
   <style>
+    body { margin: 0; font-family: sans-serif; }
+    .sticky-top {
+      position: sticky;
+      top: 0;
+      background: white;
+      padding: 10px;
+      z-index: 2;
+      border-bottom: 1px solid #ccc;
+    }
+    .log-wrapper {
+      min-height: 0;
+      max-height: calc(100vh - 120px);
+      overflow-y: auto;
+    }
     table { width: 100%; border-collapse: collapse; }
     th, td { border: 1px solid #ddd; padding: 8px; vertical-align: top; }
-    th { background-color: #f2f2f2; }
+    thead th {
+      position: sticky;
+      top: 0px;
+      background-color: #f2f2f2;
+      z-index: 1;
+    }
     pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; }
   </style>
 </head>
 <body>
-  <label for="token">Bearer Token:</label> <input type="text" id="token" placeholder="Enter token" style="width:400px;"><br><br>
-  <h1>API Log Viewer</h1>
-  <table>
-    <thead>
-      <tr>
-        <th>Timestamp</th>
-        <th>Method</th>
-        <th>Path</th>
-        <th>Client IP</th>
-        <th>Status Code</th>
-        <th>Input</th>
-        <th>Output</th>
-      </tr>
-    </thead>
-    <tbody id="log-entries"></tbody>
-  </table>
-
+  <div class="sticky-top">
+    <label for="token">Bearer Token:</label>
+    <input type="text" id="token" placeholder="Enter token" style="width:400px;">
+    <h1>API Log Viewer</h1>
+  </div>
+  <div class="log-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Method</th>
+          <th>Path</th>
+          <th>Client IP</th>
+          <th>Status Code</th>
+          <th>Command</th>
+          <th>Stdout</th>
+          <th>Stderr</th>
+          <th>Exit Code</th>
+        </tr>
+      </thead>
+      <tbody id="log-entries"></tbody>
+    </table>
+  </div>
 <script>
-async function loadApiLog() {
-  const token = localStorage.getItem("bearerToken");
-  if (!token) return;
-function getQueryParam(name, defaultValue) {
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get(name) || defaultValue;
-}
-
-const limit = getQueryParam("limit", 10);
-
-const response = await fetch(`/api/log?limit=${limit}`, {
-    headers: { Authorization: "Bearer " + token }
-  });
+function prettyLogTable(text) {
   const tbody = document.getElementById("log-entries");
   tbody.innerHTML = "";
-  if (response.ok) {
-    const text = await response.text();
-    text.trim().split("\n").forEach(line => {
-      const entry = JSON.parse(line);
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${entry.timestamp}</td>
-        <td>${entry.method}</td>
-        <td>${entry.path}</td>
-        <td>${entry.client_ip}</td>
-        <td>${entry.status_code}</td>
-        <td><pre>${entry.input || ''}</pre></td>
-        <td><pre>${entry.output || ''}</pre></td>
-      `;
-      tbody.appendChild(row);
-    });
-  } else {
-    tbody.innerHTML = `<tr><td colspan='7'>Failed to load log: ${response.status}</td></tr>`;
-  }
+  text.trim().split("\n").forEach(line => {
+    const entry = JSON.parse(line);
+    let command = "", stdout = "", stderr = "", exitCode = "";
+    try { command = JSON.parse(entry.input)?.command || ""; } catch {}
+    try {
+      const out = JSON.parse(entry.output);
+      stdout = out.stdout || "";
+      stderr = out.stderr || "";
+      exitCode = out.exit_code ?? "";
+    } catch {
+      stdout = entry.output;
+      stderr = "";
+    }
+    if (entry.path === "/api/log") {
+      stdout = stdout.slice(0, 200) + "...";
+      stderr = stderr.slice(0, 200) + "...";
+    }
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${entry.timestamp}</td>
+      <td>${entry.method}</td>
+      <td>${entry.path}</td>
+      <td>${entry.client_ip}</td>
+      <td>${entry.status_code}</td>
+      <td><pre></pre></td>
+      <td><pre></pre></td>
+      <td><pre></pre></td>
+      <td>${exitCode}</td>
+    `;
+    row.children[5].firstChild.innerText = command;
+    row.children[6].firstChild.innerText = stdout;
+    row.children[7].firstChild.innerText = stderr;
+    tbody.appendChild(row);
+  });
+  tbody.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
-
 window.onload = function () {
   const tokenField = document.getElementById("token");
   const savedToken = localStorage.getItem("bearerToken");
@@ -83,6 +110,15 @@ window.onload = function () {
   });
   loadApiLog();
 };
+function loadApiLog() {
+  const token = localStorage.getItem("bearerToken");
+  if (!token) return;
+  fetch("/api/log", {
+    headers: { Authorization: "Bearer " + token }
+  })
+    .then(response => response.text())
+    .then(prettyLogTable);
+}
 </script>
 </body>
 </html>
