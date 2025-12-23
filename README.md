@@ -1,3 +1,4 @@
+![Aishell Logo](https://aishell.gleixner.xyz/static/favicon.svg)
 # aishell: a shell for your AI
 Aishell does not add AI to your shell. Aishell provides your AI root shell access to a server you control.
 
