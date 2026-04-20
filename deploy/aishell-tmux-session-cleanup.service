@@ -1,0 +1,8 @@
+[Unit]
+Description=Clean up unattached tmux sessions matching ^default-
+Documentation=https://${YOUR_DOMAIN}/static/api_log.html
+
+[Service]
+Type=oneshot
+Environment=TMUX_SESSION_REGEX=^default-
+ExecStart=/usr/local/bin/aishell-tmux-session-cleanup.sh

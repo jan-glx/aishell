@@ -2,9 +2,9 @@
 -include .env
 export
 
-.PHONY: setup venv deploy-service deploy-openapi deploy-nginx deploy test-service test build
+.PHONY: setup venv build deploy deploy-service deploy-openapi deploy-static deploy-nginx deploy-logrotate deploy-tmux-cleanup test test-deploy-assets test-syntax test-uvicornapp test-deployed test-deployed-nginx status redeploy
 
-deploy: setup build deploy-service deploy-openapi deploy-static deploy-nginx deploy-logrotate
+deploy: setup build deploy-service deploy-openapi deploy-static deploy-nginx deploy-logrotate deploy-tmux-cleanup
 
 setup: venv
 	LOG_DIR=/var/log/aishell
@@ -35,6 +35,21 @@ deploy-service: /etc/systemd/system/aishell.service
 
 /etc/systemd/system/aishell.service: deploy/aishell.service
 	envsubst < deploy/aishell.service | sudo tee /etc/systemd/system/aishell.service > /dev/null
+
+/usr/local/bin/aishell-tmux-session-cleanup.sh: deploy/aishell-tmux-session-cleanup.sh
+	sudo install -m 0755 $< $@
+
+/etc/systemd/system/aishell-tmux-session-cleanup.service: deploy/aishell-tmux-session-cleanup.service
+	envsubst < deploy/aishell-tmux-session-cleanup.service | sudo tee /etc/systemd/system/aishell-tmux-session-cleanup.service > /dev/null
+
+/etc/systemd/system/aishell-tmux-session-cleanup.timer: deploy/aishell-tmux-session-cleanup.timer
+	sudo install -m 0644 $< $@
+
+deploy-tmux-cleanup: /usr/local/bin/aishell-tmux-session-cleanup.sh /etc/systemd/system/aishell-tmux-session-cleanup.service /etc/systemd/system/aishell-tmux-session-cleanup.timer
+	sudo systemctl daemon-reload
+	sudo systemctl enable aishell-tmux-session-cleanup.timer
+	sudo systemctl start aishell-tmux-session-cleanup.timer
+	sudo systemctl status aishell-tmux-session-cleanup.timer --no-pager
 
 
 deploy-static: favicon.ico
@@ -95,7 +110,16 @@ test-deployed: /etc/systemd/system/aishell.service
 			127.0.0.1:8000/execute) ; \
 		echo "$$resp" | grep -q "Hello Jan" || (echo "Test failed, response:" ; echo "$$resp" ; false) ; 
 
-test: test-service test-uvicornapp
+test-deploy-assets:
+	bash -n deploy/aishell-tmux-session-cleanup.sh
+	tmpdir=$$(mktemp -d) ; \
+	trap 'rm -rf "$$tmpdir"' EXIT ; \
+	envsubst < deploy/aishell-tmux-session-cleanup.service > "$$tmpdir/aishell-tmux-session-cleanup.service" ; \
+	cp deploy/aishell-tmux-session-cleanup.timer "$$tmpdir/aishell-tmux-session-cleanup.timer" ; \
+	sed -i "s|ExecStart=/usr/local/bin/aishell-tmux-session-cleanup.sh|ExecStart=$(PWD)/deploy/aishell-tmux-session-cleanup.sh|" "$$tmpdir/aishell-tmux-session-cleanup.service" ; \
+	systemd-analyze verify "$$tmpdir/aishell-tmux-session-cleanup.service" "$$tmpdir/aishell-tmux-session-cleanup.timer" > /dev/null
+
+test: test-syntax test-deploy-assets test-uvicornapp
 
 .PHONY: status
 status:
