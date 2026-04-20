@@ -42,9 +42,15 @@ EOF
 ```
 
 ### Setup and Deploy
-Configure ngix and setup a service (systemd)
+Configure nginx, install the FastAPI service, and deploy the monthly tmux session cleanup timer.
 ```sh
+sudo make test
 sudo make deploy
+```
+
+### Verify deployment
+```sh
+sudo systemctl status aishell
 ```
 
 ###  Setting Up a Custom GPT with OpenAI
