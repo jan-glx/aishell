@@ -141,8 +141,5 @@ deploy-logrotate:
 	echo "    copytruncate" | sudo tee -a /etc/logrotate.d/aishell > /dev/null
 	echo "}" | sudo tee -a /etc/logrotate.d/aishell > /dev/null
 
-	favicon.ico: aishell/favicon.svg
-	convert $< -define icon:auto-resize=64,48,32,16 aishell/favicon.ico
-
 favicon.ico: aishell/favicon.svg
 	convert $< -define icon:auto-resize=64,48,32,16 aishell/favicon.ico
