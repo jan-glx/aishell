@@ -7,11 +7,11 @@ export
 deploy: setup build deploy-service deploy-openapi deploy-static deploy-nginx deploy-logrotate deploy-tmux-cleanup
 
 setup: venv
-	LOG_DIR=/var/log/aishell
 	sudo mkdir -p $(LOG_DIR)
 
 venv: ../venv-aishell/touchfile
 
+LOG_DIR=/var/log/aishell
 PYTHON=../venv-aishell/bin/python
 
 $(PYTHON):
