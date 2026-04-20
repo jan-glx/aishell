@@ -28,9 +28,8 @@ build: ../venv-aishell/touchfile
 deploy-service: /etc/systemd/system/aishell.service
 	sudo systemctl daemon-reload
 	sudo systemctl enable aishell
-	sudo systemctl stop aishell
-	sudo systemctl start aishell
-	sudo systemctl status aishell
+	sudo systemctl restart aishell
+	sudo systemctl status aishell --no-pager
 
 
 /etc/systemd/system/aishell.service: deploy/aishell.service
@@ -128,7 +127,7 @@ status:
 	@echo "\n[FASTAPI STATUS - aishell]" && systemctl status aishell --no-pager
 	@echo "\n[FASTAPI LOGS - aishell]" && journalctl -u aishell --no-pager -n 30
 
-.PHONEY: redeploy
+.PHONY: redeploy
 redeploy:
 	echo "cd $PWD && sleep 3 && /usr/bin/make deploy > ~/output/deploy.log 2>&1" | at now
 
