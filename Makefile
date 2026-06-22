@@ -2,7 +2,7 @@
 -include .env
 export
 
-.PHONY: setup venv build deploy deploy-service deploy-openapi deploy-static deploy-nginx deploy-logrotate deploy-tmux-cleanup test test-deploy-assets test-syntax test-uvicornapp test-deployed test-deployed-nginx status redeploy
+.PHONY: setup venv build deploy deploy-service deploy-openapi deploy-static deploy-nginx deploy-logrotate deploy-tmux-cleanup test test-deploy-assets test-syntax test-uvicornapp test-pytest test-deployed test-deployed-nginx status redeploy
 
 deploy: setup build deploy-service deploy-openapi deploy-static deploy-nginx deploy-logrotate deploy-tmux-cleanup
 
@@ -118,7 +118,11 @@ test-deploy-assets:
 	sed -i "s|ExecStart=/usr/local/bin/aishell-tmux-session-cleanup.sh|ExecStart=$(PWD)/deploy/aishell-tmux-session-cleanup.sh|" "$$tmpdir/aishell-tmux-session-cleanup.service" ; \
 	systemd-analyze verify "$$tmpdir/aishell-tmux-session-cleanup.service" "$$tmpdir/aishell-tmux-session-cleanup.timer" > /dev/null
 
-test: test-syntax test-deploy-assets test-uvicornapp
+test-pytest: build
+	$(PYTHON) -m pip install '.[test]'
+	$(PYTHON) -m pytest -q
+
+test: test-syntax test-deploy-assets test-uvicornapp test-pytest
 
 .PHONY: status
 status:
