@@ -1,10 +1,23 @@
-from fastapi import Depends, HTTPException, Header, status
+import os
+import secrets
 
-API_TOKEN = "your_secure_token_here"  # Replace with your actual token
+from fastapi import HTTPException, Header, status
 
-def verify_token(authorization: str = Header(...)):
-    if not authorization.startswith("Bearer "):
+
+def get_api_token() -> str:
+    token = os.getenv("API_TOKEN")
+    if not token:
+        raise RuntimeError("API_TOKEN is not set")
+    return token
+
+
+def verify_token(authorization: str = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
+
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token format")
-    token = authorization.split(" ")[1]
-    if token != API_TOKEN:
+
+    if not secrets.compare_digest(token, get_api_token()):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")

@@ -1,9 +1,10 @@
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 import subprocess
 import time
+from .auth import verify_token
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_token)])
 
 def ensure_tmux_session(session: str):
     result = subprocess.run(["tmux", "has-session", "-t", session], stderr=subprocess.DEVNULL)

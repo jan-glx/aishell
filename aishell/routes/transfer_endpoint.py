@@ -1,21 +1,16 @@
-from fastapi import File, UploadFile, Form, Header, HTTPException, APIRouter
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pathlib import Path
-import os
+from .auth import verify_token
 
-router = APIRouter()
-API_TOKEN = os.getenv("API_TOKEN", "supersecret")
+router = APIRouter(dependencies=[Depends(verify_token)])
 
 @router.post("/transfer")
 def transfer_file(
-    authorization: str = Header(None),
     filename: str = Form(None),
     content: str = Form(None),
     file: UploadFile = File(None)
 ):
-    if authorization != f"Bearer {API_TOKEN}":
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
     output_path = Path.home() / "output"
     output_path.mkdir(exist_ok=True)
 

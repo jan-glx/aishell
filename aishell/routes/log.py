@@ -1,9 +1,11 @@
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 import os
-router = APIRouter()
+from .auth import verify_token
+
+router = APIRouter(dependencies=[Depends(verify_token)])
 LOG_PATH = "/var/log/aishell/api_log.jsonl"
-API_TOKEN = os.getenv("API_TOKEN", "supersecret")
+
 def tail(filename, n=10, buf_size=1024):
     lines = []
     with open(filename, "rb") as f:
@@ -19,11 +21,8 @@ def tail(filename, n=10, buf_size=1024):
     return b"\n".join(lines[-n:]).decode("utf-8", errors="replace")
 
 @router.get("/api/log", response_class=PlainTextResponse)
-async def get_log(authorization: str = Header(None)):
-    if authorization != f"Bearer {API_TOKEN}":
-        raise HTTPException(status_code=401, detail="Unauthorized")
+async def get_log():
     if not os.path.exists(LOG_PATH):
         raise HTTPException(status_code=404, detail="Log file not found")
     with open(LOG_PATH, "r") as f:
         return f.read()
-

@@ -1,19 +1,14 @@
-import os
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File
 from pathlib import Path
+from .auth import verify_token
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_token)])
 
 OUTPUT_DIR = Path.home() / "uploads"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-API_TOKEN = os.getenv("API_TOKEN", "")
-
 @router.post("/upload")
-async def upload_file(token: str = Form(...), file: UploadFile = File(...)):
-    if token != API_TOKEN:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-
+async def upload_file(file: UploadFile = File(...)):
     file_path = OUTPUT_DIR / file.filename
     with file_path.open("wb") as buffer:
         content = await file.read()

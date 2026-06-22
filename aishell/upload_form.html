@@ -82,10 +82,10 @@
 										              const token = tokenField.value;
 										              const formData = new FormData();
 										              formData.append("file", file);
-										              formData.append("token", token);
 
 										              const xhr = new XMLHttpRequest();
 										              xhr.open("POST", "/upload");
+										              xhr.setRequestHeader("Authorization", "Bearer " + token);
 
 										              xhr.upload.addEventListener("progress", e => {
 												                if (e.lengthComputable) {

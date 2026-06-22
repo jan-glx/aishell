@@ -1,13 +1,13 @@
-from fastapi import Header, HTTPException, APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List
 import requests
 from pathlib import Path
 import os
 from openai import OpenAI
+from .auth import verify_token
 
-router = APIRouter()
-API_TOKEN = os.getenv("API_TOKEN", "supersecret")
+router = APIRouter(dependencies=[Depends(verify_token)])
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if not OPENAI_API_KEY:
@@ -25,10 +25,7 @@ class TransferRequest(BaseModel):
     openaiFileIdRefs: List[OpenAIFile]
 
 @router.post("/transfer")
-def transfer_file(data: TransferRequest, authorization: str = Header(None)):
-    if authorization != f"Bearer {API_TOKEN}":
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
+def transfer_file(data: TransferRequest):
     output_path = Path.home() / "output"
     output_path.mkdir(exist_ok=True)
 
@@ -55,4 +52,3 @@ def transfer_file(data: TransferRequest, authorization: str = Header(None)):
             continue
 
     return {"file_ids": file_ids}
-

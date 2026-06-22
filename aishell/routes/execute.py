@@ -1,19 +1,16 @@
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 import subprocess
 import os
+from .auth import verify_token
 
-router = APIRouter()
-
-API_TOKEN = os.getenv("API_TOKEN", "supersecret")
+router = APIRouter(dependencies=[Depends(verify_token)])
 
 class CommandRequest(BaseModel):
     command: str
 
 @router.post("/execute")
-def execute_command(request: CommandRequest, authorization: str = Header(None)):
-    if authorization != f"Bearer {API_TOKEN}":
-        raise HTTPException(status_code=401, detail="Unauthorized")
+def execute_command(request: CommandRequest):
     try:
         env = {**os.environ,
             "HOME": os.environ.get("HOME", "/root"),

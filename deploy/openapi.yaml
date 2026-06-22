@@ -49,14 +49,16 @@ paths:
                       type: string
                       format: uri
 
-  /download:
+  /download/{filename}:
     get:
       operationId: getFile
       summary: Retrieve a previously uploaded file
       description: Returns a file from the output directory
+      security:
+        - bearerAuth: []
       parameters:
         - name: filename
-          in: query
+          in: path
           required: true
           schema:
             type: string

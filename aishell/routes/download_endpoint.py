@@ -1,8 +1,9 @@
-from fastapi import HTTPException, APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pathlib import Path
+from .auth import verify_token
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_token)])
 
 @router.get("/download/{filename}")
 def get_file(filename: str):
