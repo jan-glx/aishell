@@ -98,7 +98,7 @@ test-deployed-nginx: /etc/systemd/system/aishell.service /etc/nginx/sites-enable
 			-H "Authorization: Bearer $${API_TOKEN}" \
 			-H "Content-Type: application/json" \
 			-d '{"command":"echo Hello Jan"}' \
-			http://$(YOUR_DOMAIN)/execute) ; \
+			https://$(YOUR_DOMAIN)/execute) ; \
 		echo "$$resp" | grep -q "Hello Jan" || (echo "Test failed, response:" ; echo "$$resp" ; false) ; 
 
 test-deployed: /etc/systemd/system/aishell.service
