@@ -14,5 +14,6 @@ class CommandRequest(BaseModel):
 app.include_router(transfer_openai.router)
 app.include_router(transfer_endpoint.router)
 app.include_router(download_endpoint.router)
+app.include_router(download_endpoint.public_router)
 app.include_router(log.router)
 app.include_router(execute.router)

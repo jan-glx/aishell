@@ -49,7 +49,7 @@ paths:
                       type: string
                       format: uri
 
-  /download/{filename}:
+  /download:
     get:
       operationId: getFile
       summary: Retrieve a previously uploaded file
@@ -58,7 +58,7 @@ paths:
         - bearerAuth: []
       parameters:
         - name: filename
-          in: path
+          in: query
           required: true
           schema:
             type: string
