@@ -43,11 +43,15 @@ paths:
               schema:
                 type: object
                 properties:
-                  urls:
+                  files:
                     type: array
                     items:
-                      type: string
-                      format: uri
+                      type: object
+                      properties:
+                        filename:
+                          type: string
+                        path:
+                          type: string
 
   /download:
     get:

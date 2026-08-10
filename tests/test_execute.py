@@ -8,7 +8,7 @@ TEST_API_TOKEN = os.environ.get("TEST_API_TOKEN", os.environ.get("API_TOKEN", "t
 os.environ["API_TOKEN"] = TEST_API_TOKEN
 TEST_DOMAIN = os.environ.get("TEST_YOUR_DOMAIN", "example.com")
 os.environ["YOUR_DOMAIN"] = TEST_DOMAIN
-os.environ.setdefault("OPENAI_API_KEY", "test-openai-key")
+os.environ.pop("OPENAI_API_KEY", None)
 
 from aishell import app
 
