@@ -75,7 +75,7 @@ test-syntax: ../venv-aishell/touchfile
 	$(PYTHON) -c "import aishell"
 
 test-uvicornapp: ../venv-aishell/touchfile
-	timeout 6 $(PYTHON) -m uvicorn aishell:app --host 0.0.0.0 --port 8002 & \
+	@timeout 6 $(PYTHON) -m uvicorn aishell:app --host 0.0.0.0 --port 8002 & \
 	server_pid=$$! ; \
 	( \
 		for i in 1 2 3 4 5 ; do \
@@ -83,7 +83,7 @@ test-uvicornapp: ../venv-aishell/touchfile
 			sleep 1 ; \
 		done ; \
 		resp=$$(curl -sS --fail -X POST \
-			-H "Authorization: Bearer ${API_TOKEN}" \
+			-H "Authorization: Bearer $${API_TOKEN}" \
 			-H "Content-Type: application/json" \
 			-d '{"command":"echo Hello Jan"}' \
 			http://localhost:8002/execute) ; \
@@ -94,16 +94,16 @@ test-uvicornapp: ../venv-aishell/touchfile
 	)
 
 test-deployed-nginx: /etc/systemd/system/aishell.service /etc/nginx/sites-enabled/$(YOUR_DOMAIN)
-		resp=$$(curl -sS --fail -X POST \
-			-H "Authorization: Bearer ${API_TOKEN}" \
+	@resp=$$(curl -sS --fail -X POST \
+			-H "Authorization: Bearer $${API_TOKEN}" \
 			-H "Content-Type: application/json" \
 			-d '{"command":"echo Hello Jan"}' \
 			http://$(YOUR_DOMAIN)/execute) ; \
 		echo "$$resp" | grep -q "Hello Jan" || (echo "Test failed, response:" ; echo "$$resp" ; false) ; 
 
 test-deployed: /etc/systemd/system/aishell.service
-		resp=$$(curl -sS --fail -X POST \
-			-H "Authorization: Bearer ${API_TOKEN}" \
+	@resp=$$(curl -sS --fail -X POST \
+			-H "Authorization: Bearer $${API_TOKEN}" \
 			-H "Content-Type: application/json" \
 			-d '{"command":"echo Hello Jan"}' \
 			127.0.0.1:8000/execute) ; \
