@@ -1,11 +1,10 @@
 from fastapi import FastAPI
 from .logging_middleware import LoggingMiddleware
 from pydantic import BaseModel
-from .routes import upload, tmux, transfer_openai, transfer_endpoint, download_endpoint, execute, log, google_oauth
+from .routes import tmux, transfer_openai, transfer_endpoint, download_endpoint, execute, log, google_oauth
 
 app = FastAPI()
 app.add_middleware(LoggingMiddleware)
-app.include_router(upload.router)
 app.include_router(tmux.router)
 
 class CommandRequest(BaseModel):

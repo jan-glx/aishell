@@ -73,3 +73,37 @@ def test_download_file_rejects_tampered_signature(tmp_path, monkeypatch):
     )
 
     assert response.status_code == 403
+
+
+def test_transfer_form_upload_saves_to_input(tmp_path, monkeypatch):
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    response = client.post(
+        "/transfer/form",
+        headers={"Authorization": f"Bearer {TEST_API_TOKEN}"},
+        files={"file": ("upload.txt", b"hello")},
+    )
+
+    assert response.status_code == 200
+    assert (tmp_path / "input" / "upload.txt").read_bytes() == b"hello"
+    assert response.json() == {
+        "filename": "upload.txt",
+        "path": "~/input/upload.txt",
+    }
+
+
+def test_upload_alias_saves_to_input(tmp_path, monkeypatch):
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    response = client.post(
+        "/upload",
+        headers={"Authorization": f"Bearer {TEST_API_TOKEN}"},
+        files={"file": ("legacy.txt", b"hello")},
+    )
+
+    assert response.status_code == 200
+    assert (tmp_path / "input" / "legacy.txt").read_bytes() == b"hello"
+    assert response.json() == {
+        "filename": "legacy.txt",
+        "path": "~/input/legacy.txt",
+    }
