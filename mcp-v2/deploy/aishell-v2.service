@@ -1,5 +1,5 @@
 [Unit]
-Description=aishell v2 multi-user-aware direct executor (standby for MCP cutover)
+Description=aishell v2 native multi-user root executor (MCP backend)
 After=network.target
 
 [Service]

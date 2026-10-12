@@ -501,6 +501,7 @@ class DownloadHandler(http.server.BaseHTTPRequestHandler):
                 self.send_header('Content-Disposition', "attachment; filename*=UTF-8''" + quote(filename, safe=''))
                 self.send_header('Content-Length', str(st.st_size))
                 self.send_header('Cache-Control', 'no-store')
+                self.send_header('Referrer-Policy', 'no-referrer')
                 self.send_header('X-Content-Type-Options', 'nosniff')
                 self.end_headers()
                 if with_body:

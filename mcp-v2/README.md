@@ -1,6 +1,6 @@
 # aishell v2 — independent MCP + multi-user executor
 
-**Project state: implemented and successfully tested in staging, not yet cut over to the public ChatGPT connector.**
+**Project state (October 12, 2026): v2 is LIVE at `https://aishell.gleixner.xyz/mcp`.** The intermediate MCP 1.9/bridge services are stopped and disabled. The original legacy OpenAPI/FastAPI backend remains active because other server applications depend on it. The ChatGPT OAuth issuer, URL, registration database, and existing grants were retained.
 
 The new implementation has no dependency on the old root FastAPI `aishell.service` or its API token. It is explicitly designed to be installed *alongside* a server that also runs unrelated websites, APIs, mail, and services.
 
@@ -44,14 +44,17 @@ An OAuth *subject* identifies who has authenticated; scopes identify what that p
 
 | Service | Role | Status/cutover |
 | --- | --- | --- |
-| `aishell.service` | Existing FastAPI with other functionality | **Leave running**; not part of v2 removal |
-| `aishell-mcp-test.service` | Currently public authenticated MCP plugin | **Leave running** until explicit v2 cutover |
-| `aishell-mcp-bridge.service` | Existing root bridge to old FastAPI | **Leave running** until public v2 cutover |
-| `aishell-v2.service` | New standalone direct executor, root process | Standby, socket-only and localhost downloads |
-| `aishell-v2-stage.service` | Isolated two-user executor with synthetic OAuth tokens | Testing only; stop after test |
-| `aishell-v2-mcp-shadow.service` | Isolated staging MCP/OAuth, loopback TCP 8767 | Testing only; stop after test |
+| `aishell.service` | Legacy OpenAPI/FastAPI + other applications | **ACTIVE, enabled; preserve** |
+| `aishell-v2.service` | Native root-owned multi-user execution service | **ACTIVE, enabled**, Unix socket `/run/aishell-v2/control.sock`, downloads 127.0.0.1:8780 |
+| `aishell-v2-mcp.service` | Native MCP/OAuth frontend, 127.0.0.1:8766 | **ACTIVE, enabled**, public `https://aishell.gleixner.xyz/mcp` |
+| `aishell-mcp-test.service` | **Obsolete MCP 1.9** compatibility/bridge frontend | **STOPPED, disabled; rollback only** |
+| `aishell-mcp-bridge.service` | **Obsolete MCP 1.9** root bridge to FastAPI | **STOPPED, disabled; rollback only** |
+| `aishell-v2-stage.service` | Isolated staging executor | STOPPED (tests only) |
+| `aishell-v2-mcp-shadow.service` | Isolated staging OAuth/MCP | STOPPED (tests only) |
 
-The public `https://aishell.gleixner.xyz/mcp` remains on existing port 8766. **Production nginx configuration, all original FastAPI routes, and Google OAuth were not modified during v2 development.** No other nginx application (`/klangwald`, `/nomdebebe`, homepage, `/static`, `/output`, legacy API) is to be removed as part of MCP migration.
+**Only two application stacks should remain:** (1) legacy FastAPI, which has unrelated application routes; (2) v2 MCP + direct Unix executor. The obsolete MCP 1.9 services are not required for either stack and no longer start at boot.
+
+Public MCP and OAuth discovery, authorization, token, registration and revocation routes keep their original URLs/issuer. Nginx continues to proxy those to port 8766, now owned by `aishell-v2-mcp.service`. The only nginx route added in the v2 deployment is `/mcp-v2/download/` to port 8780, with `access_log off` to avoid logging signed download credentials. **Legacy nginx `/klangwald`, `/nomdebebe`, `/`, `/static`, `/output`, Google OAuth and FastAPI routes were not replaced.**
 
 ## Code and configuration
 
@@ -72,10 +75,10 @@ The public `https://aishell.gleixner.xyz/mcp` remains on existing port 8766. **P
 Real host configuration and credentials are **not in this repository**:
 
 - `/etc/aishell-v2/config.json` root:root 0600 — subject/Unix mapping and runtime settings.
-- `/etc/aishell-v2/auth-users.json` root:aishell-mcp-test 0640 — real OAuth username, subject, password hash and allowed scopes (created on a fresh install; not enabled in production yet).
+- `/etc/aishell-v2/auth-users.json` root:aishell-mcp-test 0640 — live OAuth usernames, subjects, Argon2id password hashes and scopes. Initially maps `owner` to existing `local-aishell-owner` with the **same verified password hash used by MCP 1.9**; no plaintext credential was copied or committed.
 - `/etc/aishell-v2/downloads.key` root:root 0600 — download URL HMAC key.
-- `/var/lib/aishell-v2/oauth.sqlite3` — standalone OAuth client/token database for a fresh deployment.
-- Current production OAuth database: `/var/lib/aishell-mcp-test/oauth.sqlite3` — must be preserved if reusing existing ChatGPT client grants during cutover.
+- `/var/lib/aishell-v2/oauth.sqlite3` — standalone OAuth client/token database for a **new installation**.
+- **Current live server uses** `/var/lib/aishell-mcp-test/oauth.sqlite3` — preserved original ChatGPT OAuth registration/tokens, now served by v2 without migrating or replacing the database file. Although the directory name contains `mcp-test`, it is the live state and must not be deleted with the obsolete 1.9 service.
 - Staging fixtures: `/var/lib/aishell-v2-stage/oauth.sqlite3` and `/etc/aishell-v2/stage-auth-users.json` — **never copy staging credentials into production**.
 
 ## Fresh Debian 12 installation
@@ -90,7 +93,7 @@ sudo AISHELL_DOMAIN=mcp.example.com bash scripts/bootstrap.sh
 
 This creates an independent venv, root-owned secrets and config, an MCP service account and systemd files. Nothing starts automatically. It prints the path to the root-only initial owner password. If another OAuth server is already running, set `AISHELL_OAUTH_DB` to the intended database path before running, and review migration implications carefully.
 
-**Review first:** `/etc/aishell-v2/config.json`, `/etc/aishell-v2/auth-users.json`, `/etc/systemd/system/aishell-v2.service`, `/etc/systemd/system/aishell-v2-mcp.service`. The MCP unit template binds port 8766. **Do not start it on this host while the existing MCP service owns that port.** On an empty host, after verifying OAuth/client security and backups, start executor then MCP, integrate *only* the required nginx locations, `nginx -t`, reload nginx, configure private ChatGPT connector with Mixed OAuth and DCR.
+**Review first:** `/etc/aishell-v2/config.json`, `/etc/aishell-v2/auth-users.json`, `/etc/systemd/system/aishell-v2.service`, `/etc/systemd/system/aishell-v2-mcp.service`. The MCP unit template binds port 8766. **Do not start a second MCP process on that port; the production v2 MCP now owns it on this host.** On an empty host, after verifying OAuth/client security and backups, start executor then MCP, integrate *only* the required nginx locations, `nginx -t`, reload nginx, configure private ChatGPT connector with Mixed OAuth and DCR.
 
 ### Add a new unprivileged user
 
@@ -114,7 +117,7 @@ The command prompts for a separate password, and adds `user:alice` → `alice` t
 - Shell commands: max 12 KB command text, 65-second time limit, ~70 KB output per stream. Use tmux for long jobs.
 - tmux uses the dedicated `-L aishell-v2` socket namespace. **It intentionally does not attach to sessions from the legacy GPT**; migration of old tmux sessions needs a separate operational plan.
 - OpenAI file fetches allow only documented OpenAI file-host patterns, use validated public DNS with pinned TLS server hostname and no HTTP redirects. Limit 16 MiB/file. **Genuine ChatGPT-uploaded file IDs/URLs still need an end-to-end user-interface test.**
-- Signed files: root executor issues HTTPS URLs with 5-minute HMAC expiration, currently hosted at `/mcp-v2/download/...`. The staging test exercises these over localhost:8781. Public file links **will not work** until its dedicated nginx location is added at cutover.
+- Signed files: root executor issues HTTPS URLs with 5-minute HMAC expiration at `/mcp-v2/download/...`. Production nginx now proxies that prefix to localhost:8780 with `access_log off` (do not expose URL signatures in logs). Real signed downloads and tampered-signature rejection were tested over public HTTPS.
 - Public tool selection, `runCommand`, and consent still carry prompt-injection/destructive-command risks; restrict plugin sharing to trusted people and require approvals for high-impact actions.
 
 ## Verified in isolated staging
@@ -140,16 +143,35 @@ sudo /opt/aishell-v2/.venv/bin/python tests/test_mcp_shadow.py
 
 Tests assume the **staging-only** config and services from this server; they are not run automatically on a fresh installation. Clean synthetic clients/tokens and stop stage services after tests. The staging owner/guest passwords are NEVER committed to this source tree.
 
-## Safe cutover — not yet performed
+## Production MCP cutover completed — 2026-10-12
 
-1. Record and back up current **MCP-only** systemd units, OAuth DB, v2 root config, signing key and nginx virtual host. Preserve a separate SSH/legacy-GPT recovery path.
-2. Preserve the existing OAuth registration DB to avoid forcing ChatGPT to recreate its connector; ensure the new OAuth user config maps the existing `local-aishell-owner` subject correctly. Check tokens/scopes and client callback registration.
-3. Verify `/opt/aishell-v2/executor.py` and direct v2 service with signed-download loopback checks. Review stale tmux sessions and migration semantics.
-4. During a planned short MCP-only cutover, stop `aishell-mcp-test` (port 8766) and activate `aishell-v2-mcp` (same port, issuer and resource). Keep `aishell.service` and `aishell-mcp-bridge` **running** during verification.
-5. Add only the `/mcp-v2/download/` nginx location if v2 getFile links should be reachable. Do not replace unrelated `location /`, homepage, applications, static, public, Google OAuth, or legacy APIs. `nginx -t` then reload nginx.
-6. Re-test actual ChatGPT Plus OAuth/owner command, guest mode, tmux, file transfer, signed output link. Verify unrelated site endpoints.
-7. Rollback: restore MCP-specific nginx configuration, stop new MCP service, restart `aishell-mcp-test`, keep legacy services as before. Preserve OAuth DB backup.
-8. Retire the old bridge only after successful real ChatGPT v2 use. **Do not remove the original FastAPI service merely because the old Custom GPT retires; other applications may depend on it.**
+The MCP 1.9 compatibility implementation was a temporary migration shim, not a separate product. There is **no need for an additional domain or ChatGPT connector**. We replaced only the backend behind the existing public `/mcp` endpoint, preserving the owner login and the original OAuth client/token database.
+
+The completed steps were:
+
+1. Made root-only backups of the MCP 1.9 systemd units, original nginx site, live SQLite OAuth database (online consistent SQLite backup), executor config and new auth-users mapping. Recovery directory under `/root/wd/aishell-v2-rollbacks/`, current location recorded in `/root/wd/aishell-v2-rollbacks/LATEST`. **Do not commit or distribute that directory; it contains OAuth grants and password hashes.**
+2. Created `/etc/aishell-v2/auth-users.json`, binding `owner` to the same `local-aishell-owner` subject and verified Argon2id password hash. Maintained `/etc/aishell-v2/config.json` root-only Unix UID mapping (`local-aishell-owner` → root).
+3. Configured `/etc/systemd/system/aishell-v2-mcp.service` using `AISHELL_V2_ORIGIN=https://aishell.gleixner.xyz`, the **existing** OAuth database `/var/lib/aishell-mcp-test/oauth.sqlite3`, and `/run/aishell-v2/control.sock` for root execution; no legacy FastAPI API token.
+4. Tested existing ChatGPT DCR client registration loading in v2 from a backup copy of the real OAuth database.
+5. Added ONLY nginx `location ^~ /mcp-v2/download/` to proxy signed output downloads to the root-owned localhost listener 127.0.0.1:8780, with `access_log off`. Verified HTTPS signed-download success and tampered-signature rejection.
+6. Stopped `aishell-mcp-test.service`, started `aishell-v2-mcp.service` on the **same port 8766**, and kept `aishell.service` running.
+7. Ran full live HTTPS integration: modern MCP `server/discover`, seven-tool discovery, DCR, owner password/consent, PKCE and tokens, ping, direct root `runCommand`, read/send tmux, `transferTextFile`, HTTPS `getFile`, scope denial and token revocation. Test clients/tokens and temporary files/sessions were removed. The original ChatGPT client registration was preserved.
+8. Disabled/stopped both MCP 1.9 services (`aishell-mcp-test.service`, `aishell-mcp-bridge.service`). Enabled v2 executor and MCP service on boot. Verified the old bridge Unix socket is absent while v2 MCP is healthy. Legacy FastAPI remained HTTP 200 at `/openapi.json` and other application routes were checked.
+
+**Rollback (MCP ONLY):**
+
+```bash
+# Keep the original FastAPI aishell.service RUNNING; do not undo other applications.
+sudo systemctl stop aishell-v2-mcp.service
+sudo systemctl enable --now aishell-mcp-bridge.service aishell-mcp-test.service
+# Verify:
+curl -fsS https://aishell.gleixner.xyz/.well-known/oauth-authorization-server >/dev/null
+curl -fsS https://aishell.gleixner.xyz/openapi.json >/dev/null
+```
+
+The added signed-download nginx route can be left in place during rollback; it has no effect on legacy routes. If nginx config itself must be restored, use the backed-up *MCP site configuration only* after checking it against later unrelated changes, then run `nginx -t && systemctl reload nginx`. **Do not roll back or delete the live OAuth database unless corruption is confirmed**: v2 and 1.9 use the same DB schema and preserving new tokens/refresh grants avoids unnecessary user reauthorization. Never replace the entire server configuration with a stale snapshot.
+
+**Status to verify separately in the ChatGPT UI:** production HTTPS self-test is successful, but a user-initiated v2 command from the existing ChatGPT plugin after this cutover has not yet been observed. The original connector should continue working without reinstallation. Also, v2 tmux uses a separate `-L aishell-v2` namespace, not the legacy tmux sessions. Genuine attached-file `transferFile` with an OpenAI file service URL needs real client testing.
 
 ## Security limitations requiring further review
 

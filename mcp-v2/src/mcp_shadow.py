@@ -1,12 +1,12 @@
-"""Isolated, self-hosted OAuth 2.1 MCP compatibility server for ChatGPT Plus.
+"""aishell v2 OAuth 2.1 MCP server for ChatGPT Plus and multiple Unix users.
 
-This service deliberately exposes only the read-only ping_aishell diagnostic.
-It has NO command execution, file transfer, tmux, Google OAuth, or user data
-access. Authentication is entirely separate from the original aishell API.
+Unprivileged public MCP endpoint with dynamic registration, PKCE, per-account
+Argon2 authentication and per-tool OAuth scopes. Privileged tools are carried
+via a private Unix socket to the independent v2 executor; no legacy FastAPI,
+Google OAuth, or legacy API token is needed for MCP execution.
 
-OAuth uses the official MCP Python SDK's RFC 7591 client registration, RFC 7636
-PKCE authorization code + refresh handling and RFC 9728 resource discovery.
-The resource owner approves access with a dedicated Argon2id-hashed password.
+This module intentionally preserves tested ChatGPT MCP compatibility (2026-07-28
+server/discover, Mixed auth, header normalization and OAuth challenges).
 """
 from __future__ import annotations
 
@@ -354,9 +354,9 @@ def describe_tools() -> list[types.Tool]:
 
 
 def invoke_local_bridge(op: str, arguments: dict, access_token: str) -> dict:
-    # The server owns no root credentials. The root-owned Unix bridge trusts
+    # The MCP server owns no root credentials. The root-owned v2 executor trusts
     # only this service's Linux UID, checked via SO_PEERCRED. Tool access is
-    # authorized by OAuth before calling this function.
+    # independently authorized by OAuth on both sides of the socket.
     payload = json.dumps({'op': op, 'arguments': arguments, 'access_token': access_token}, ensure_ascii=False).encode('utf-8') + b'\n'
     if len(payload) > 60_000:
         raise ValueError('Too much tool input (max 60 KB)')
@@ -380,7 +380,7 @@ def invoke_local_bridge(op: str, arguments: dict, access_token: str) -> dict:
     return value['result']
 
 mcp = FastMCP(
-    'aishell v2 shadow MCP',
+    'aishell v2 MCP',
     instructions=('Private aishell on the user-owned server. The root command, tmux '
                   'and file-transfer tools require explicit OAuth scopes and owner approval. '
                   'For long commands use a persistent tmux session. Avoid unnecessary destructive operations.'),
@@ -802,7 +802,7 @@ class PublicToolDiscovery:
             result = {
                 'protocolVersion': '2025-06-18',
                 'capabilities': {'tools': {'listChanged': False}},
-                'serverInfo': {'name': 'aishell v2 shadow MCP', 'version': '1.0.0'},
+                'serverInfo': {'name': 'aishell v2 MCP', 'version': '1.0.0'},
                 'instructions': 'Private user-owned aishell. Root shell, tmux and file tools require explicit OAuth permissions and owner approval.',
             }
         elif method == 'server/discover':
@@ -811,7 +811,7 @@ class PublicToolDiscovery:
                 'supportedVersions': ['2026-07-28'],
                 'capabilities': {'tools': {'listChanged': False}},
                 '_meta': {'io.modelcontextprotocol/serverInfo': {
-                    'name': 'aishell v2 shadow MCP', 'version': '1.0.0'}},
+                    'name': 'aishell v2 MCP', 'version': '1.0.0'}},
                 'instructions': 'Private user-owned aishell. Root shell, tmux and file tools require explicit OAuth permissions and owner approval.',
                 'ttlMs': 60000,
                 'cacheScope': 'public',
