@@ -4,12 +4,13 @@ The *only* control ingress is a Unix-domain socket. Peers must be an allowed
 local Linux UID AND present an OAuth access token for an administrator-mapped
 subject. Unix identities come from root-owned configuration, never tool args.
 
-One loopback HTTP listener serves time-limited HMAC-signed download URLs; this
-route is NOT installed into production nginx until a separate cutover.
+One localhost-only HTTP listener serves time-limited HMAC-signed download URLs,
+proxied at /mcp-v2/download/ by the existing shared nginx virtual host.
 """
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import hmac
 import http.client
@@ -49,6 +50,8 @@ OPERATIONS = {
 MAX_FRAME = 100_000
 MAX_FILE_BYTES = 16 * 1024 * 1024
 MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
+MAX_INLINE_IMAGE_BYTES = 512 * 1024
+MAX_SOCKET_RESULT_BYTES = 1024 * 1024
 MAX_COMMAND_BYTES = 12_000
 MAX_COMMAND_SECONDS = 65
 MAX_STDOUT_BYTES = 70_000
@@ -359,6 +362,51 @@ def fetch_openai_file(url: str) -> bytes:
         conn.close()
 
 
+def inline_image(user: Identity, filename: str) -> dict | None:
+    """Inline a small, known-safe raster image from the authenticated user's output.
+
+    A bounded binary read avoids filesystem-derived unbounded MCP responses.
+    O_NOFOLLOW, regular-file checks, file extension and magic validation are
+    applied in the root executor, rather than trusting the MCP process.
+    Anything larger/unknown uses the ordinary signed download URL only.
+    """
+    safe_filename(filename)
+    ext = Path(filename).suffix.lower()
+    expected_mime = {
+        '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif', '.webp': 'image/webp',
+    }.get(ext)
+    if expected_mime is None:
+        return None
+    dfd = directory_fd(user, 'output', create=False)
+    try:
+        fd = os.open(filename, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=dfd)
+        try:
+            st = os.fstat(fd)
+            if (not stat.S_ISREG(st.st_mode) or st.st_size <= 0
+                    or st.st_size > MAX_INLINE_IMAGE_BYTES):
+                return None
+            with os.fdopen(fd, 'rb', closefd=False) as inp:
+                data = inp.read(MAX_INLINE_IMAGE_BYTES + 1)
+        finally:
+            os.close(fd)
+    finally:
+        os.close(dfd)
+    if len(data) != st.st_size:
+        raise ValueError('Image changed during bounded read')
+    recognized = (
+        'image/png' if data.startswith(b'\x89PNG\r\n\x1a\n')
+        else 'image/jpeg' if data.startswith(b'\xff\xd8\xff')
+        else 'image/gif' if data.startswith((b'GIF87a', b'GIF89a'))
+        else 'image/webp' if len(data) >= 12 and data[:4] == b'RIFF' and data[8:12] == b'WEBP'
+        else None
+    )
+    if recognized != expected_mime:
+        return None
+    return {'type': 'image', 'mimeType': recognized,
+            'data': base64.b64encode(data).decode('ascii')}
+
+
 def signed_download(config: Configuration, user: Identity, filename: str) -> dict:
     safe_filename(filename)
     dfd = directory_fd(user, 'output', create=False)
@@ -409,7 +457,15 @@ def dispatch(config: Configuration, user: Identity, op: str, arguments: dict) ->
             result.append(save_file(user, name, payload))
         return {'files': result}
     if op == 'getFile':
-        return signed_download(config, user, arguments.get('filename'))
+        filename = arguments.get('filename')
+        data = signed_download(config, user, filename)
+        image = inline_image(user, filename)
+        if image is not None:
+            # Inline bytes are transport-only: the MCP server will move this
+            # object into a genuine MCP ImageContent block and never print base64
+            # as a text or structuredContent value.
+            data['_inline_image'] = image
+        return data
     raise PermissionError('Unknown operation')
 
 
@@ -435,7 +491,7 @@ class ExecutorHandler(socketserver.StreamRequestHandler):
             LOG.warning('Operation denied/failed: %s', type(exc).__name__)
             result = {'ok': False, 'error': type(exc).__name__ + ': ' + str(exc)[:350]}
         packed = json.dumps(result, ensure_ascii=False).encode('utf-8') + b'\n'
-        if len(packed) > 185_000:
+        if len(packed) > MAX_SOCKET_RESULT_BYTES:
             packed = b'{"ok":false,"error":"Result too large"}\n'
         self.wfile.write(packed)
 

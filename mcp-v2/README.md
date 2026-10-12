@@ -99,13 +99,17 @@ This creates an independent venv, root-owned secrets and config, an MCP service 
 
 ```bash
 sudo useradd --create-home --shell /bin/bash alice
+sudo chmod 700 /home/alice
+cd /root/wd/aishell-v2-in-original/mcp-v2
 sudo /opt/aishell-v2/.venv/bin/python scripts/add_user.py alice alice
-# Check the proposed mappings before restarting services:
-sudo cat /etc/aishell-v2/config.json
-# Never paste auth-users.json or the generated password hashes into chat.
+# The script prompts for a NEW, dedicated OAuth password (not Linux login password).
+# Review the mapping, then apply the new account lists to both services:
+sudo systemctl restart aishell-v2 aishell-v2-mcp
+sudo systemctl is-active aishell-v2 aishell-v2-mcp
+# Never paste auth-users.json, token DB or password hashes into chat.
 ```
 
-The command prompts for a separate password, and adds `user:alice` → `alice` to root-owned executor mapping and unprivileged OAuth account mapping. It intentionally refuses to map root or an already-mapped Unix account. It does **not** grant sudo; for strong isolation audit filesystem ACLs, groups, home permissions and any existing sudo policies on the host. Restart the two v2 services deliberately after reviewing configuration changes.
+The command prompts for a separate password, and adds `user:alice` → `alice` to root-owned executor mapping and unprivileged OAuth account mapping. It intentionally refuses to map root or an already-mapped Unix account. It does **not** grant sudo; for strong isolation audit filesystem ACLs, groups, home permissions and any existing sudo policies on the host. Restart the two v2 services deliberately after reviewing configuration changes. There is currently **no production guest password**: `/root/.config/aishell-v2/stage-guest-password` is an isolated throwaway staging identity and does not authenticate on production. The original owner OAuth login still uses the password from `/root/.config/aishell-mcp-oauth/owner-password` until deliberately rotated. Production stores *only account password hashes* in `/etc/aishell-v2/auth-users.json`; users must securely retain their own chosen plaintext password. Password resets and user removal/revocation have not yet been automated.
 
 ## Runtime permissions and behavior
 
@@ -118,6 +122,7 @@ The command prompts for a separate password, and adds `user:alice` → `alice` t
 - tmux uses the dedicated `-L aishell-v2` socket namespace. **It intentionally does not attach to sessions from the legacy GPT**; migration of old tmux sessions needs a separate operational plan.
 - OpenAI file fetches allow only documented OpenAI file-host patterns, use validated public DNS with pinned TLS server hostname and no HTTP redirects. Limit 16 MiB/file. **Genuine ChatGPT-uploaded file IDs/URLs still need an end-to-end user-interface test.**
 - Signed files: root executor issues HTTPS URLs with 5-minute HMAC expiration at `/mcp-v2/download/...`. Production nginx now proxies that prefix to localhost:8780 with `access_log off` (do not expose URL signatures in logs). Real signed downloads and tampered-signature rejection were tested over public HTTPS.
+- **Inline image content (2026-10-12)**: `getFile` returns the existing signed HTTPS URL in `structuredContent` **and** an MCP `{type:"image", mimeType, data}` content block for validated raster PNG/JPEG/GIF/WebP files in the authenticated user's `~/output` that are at most 512 KiB. This avoids a second DNS/HTTP fetch for image inspection by ChatGPT. The root executor enforces regular-file and `O_NOFOLLOW` protections, verifies the extension and file magic, then reads at most 512 KiB. The MCP frontend strips inline bytes from text and `structuredContent` so the image is transmitted only once. The authorized Unix socket output ceiling is now 1 MiB, while requests, commands and upload limits remain unchanged. Larger images and other files remain URL-only. Full live HTTPS test verified that `iris_pca.png` arrived byte-identically in `ImageContent` and that larger images fall back to URL-only; client-side ChatGPT rendering of that image is still to be confirmed.
 - Public tool selection, `runCommand`, and consent still carry prompt-injection/destructive-command risks; restrict plugin sharing to trusted people and require approvals for high-impact actions.
 
 ## Verified in isolated staging
@@ -155,7 +160,7 @@ The completed steps were:
 4. Tested existing ChatGPT DCR client registration loading in v2 from a backup copy of the real OAuth database.
 5. Added ONLY nginx `location ^~ /mcp-v2/download/` to proxy signed output downloads to the root-owned localhost listener 127.0.0.1:8780, with `access_log off`. Verified HTTPS signed-download success and tampered-signature rejection.
 6. Stopped `aishell-mcp-test.service`, started `aishell-v2-mcp.service` on the **same port 8766**, and kept `aishell.service` running.
-7. Ran full live HTTPS integration: modern MCP `server/discover`, seven-tool discovery, DCR, owner password/consent, PKCE and tokens, ping, direct root `runCommand`, read/send tmux, `transferTextFile`, HTTPS `getFile`, scope denial and token revocation. Test clients/tokens and temporary files/sessions were removed. The original ChatGPT client registration was preserved.
+7. Ran full live HTTPS integration: modern MCP `server/discover`, seven-tool discovery, DCR, owner password/consent, PKCE and tokens, ping, direct root `runCommand`, read/send tmux, `transferTextFile`, HTTPS `getFile`, scope denial and token revocation. Later repeated the test after adding inline MCP image content, verifying byte-exact transfer of `iris_pca.png` and URL fallback for files over 512 KiB. Test clients/tokens and temporary files/sessions were removed. The original ChatGPT client registration was preserved.
 8. Disabled/stopped both MCP 1.9 services (`aishell-mcp-test.service`, `aishell-mcp-bridge.service`). Enabled v2 executor and MCP service on boot. Verified the old bridge Unix socket is absent while v2 MCP is healthy. Legacy FastAPI remained HTTP 200 at `/openapi.json` and other application routes were checked.
 
 **Rollback (MCP ONLY):**

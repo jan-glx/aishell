@@ -328,10 +328,12 @@ TOOL_SPECS = [
              'content': {'type': 'string', 'maxLength': 24000}},
              'required': ['filename', 'content'], 'additionalProperties': False},
          read_only=False, destructive=True, open_world=False),
-    dict(name='getFile', title='Get aishell output file', scope=FILES_SCOPE,
-         description=('Return a short-lived signed HTTPS download URL for one file located in '
-                      '~/output on the aishell server. The filename must be a basename '
-                      'without directories. Download links expire in 5 minutes.'),
+    dict(name='getFile', title='Get aishell output file (image preview inline)', scope=FILES_SCOPE,
+         description=('Return a 5-minute signed HTTPS download URL for a file in your Unix account ~/output. '
+                      'For PNG, JPEG, GIF and WebP files <=512 KiB, ALSO return the actual image as '
+                      'MCP image content for direct ChatGPT visual inspection, without any subsequent URL fetch. '
+                      'For larger images and non-image files, return only the URL. '
+                      'Pass a basename filename without directories.'),
          schema={'type': 'object', 'properties': {
              'filename': {'type': 'string', 'minLength': 1}},
              'required': ['filename'], 'additionalProperties': False},
@@ -370,8 +372,8 @@ def invoke_local_bridge(op: str, arguments: dict, access_token: str) -> dict:
             if not chunk:
                 break
             reply.extend(chunk)
-            if len(reply) > 150_000:
-                raise ValueError('Bridge response exceeds limit')
+            if len(reply) > 1024 * 1024:
+                raise ValueError('Executor response exceeds 1 MiB limit')
     if not reply.endswith(b'\n'):
         raise RuntimeError('Incomplete privileged bridge response')
     value = json.loads(reply)
@@ -777,12 +779,21 @@ class PublicToolDiscovery:
                         else:
                             async with self.bridge_slots:
                                 data = await asyncio.to_thread(invoke_local_bridge, tool_name, arguments, auth[7:])
+                        # The executor returns the base64 image only for small,
+                        # validated raster files. Exclude it from structured
+                        # metadata and text (to avoid duplicate model context),
+                        # place it in the standard MCP ImageContent field.
+                        image = data.pop('_inline_image', None) if tool_name == 'getFile' else None
+                        content = [{'type': 'text', 'text':
+                                    data['message'] if tool_name == 'ping_aishell'
+                                    else json.dumps(data, ensure_ascii=False)}]
+                        if image is not None:
+                            content.append(types.ImageContent.model_validate(image).model_dump(
+                                mode='json', by_alias=True, exclude_none=True))
                         result = {
                             'isError': False,
                             'structuredContent': data,
-                            'content': [{'type': 'text', 'text':
-                                         data['message'] if tool_name == 'ping_aishell'
-                                         else json.dumps(data, ensure_ascii=False)}],
+                            'content': content,
                         }
                     except Exception as exc:
                         logger.warning('Authorized tool %s failed: %s', tool_name, type(exc).__name__)

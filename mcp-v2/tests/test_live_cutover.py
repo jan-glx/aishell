@@ -9,6 +9,7 @@ Does not touch unrelated FastAPI applications or production ChatGPT client.
 from __future__ import annotations
 
 import base64
+import shutil
 import hashlib
 import json
 import os
@@ -104,6 +105,9 @@ def main():
     unique='aishell_v2_live_'+secrets.token_hex(6)
     inputfile=Path('/root/input')/(unique+'.txt')
     outputfile=Path('/root/output')/(unique+'.txt')
+    sample_image=Path('/root/output/iris_pca.png')
+    imagefile=Path('/root/output')/(unique+'.png')
+    largeimage=Path('/root/output')/(unique+'_too_large.png')
     tmux=unique.replace('-','_')
     with httpx.Client(timeout=50,follow_redirects=False) as client:
         try:
@@ -156,6 +160,35 @@ def main():
             downloaded=expect(client.get(url),200,'Signed file download')
             assert downloaded.content==b'AISHELL_V2_FILE_DOWNLOAD_OK\n'
             print('PASS authenticated v2 file write/download')
+            if sample_image.exists() and sample_image.stat().st_size <= 512 * 1024:
+                # Preserve the user's existing iris_pca.png and test a temporary
+                # duplicate with an authenticated real MCP ImageContent result.
+                shutil.copyfile(sample_image,imagefile)
+                inline=call(client,bearer,'getFile',{'filename':imagefile.name},modern=True)
+                assert not inline['isError'],inline.get('content',[])
+                assert inline['resultType']=='complete'
+                items=inline['content']
+                image_items=[x for x in items if x.get('type')=='image']
+                assert len(image_items)==1,[x.get('type') for x in items]
+                image=image_items[0]
+                assert image['mimeType']=='image/png'
+                assert base64.b64decode(image['data'],validate=True)==sample_image.read_bytes()
+                assert 'data' not in inline['structuredContent']
+                assert '_inline_image' not in inline['structuredContent']
+                assert 'openaiFileResponse' in inline['structuredContent']
+                assert len(json.dumps(inline)) > len(image['data'])
+                assert all('data' not in text.get('text','') for text in items if text['type']=='text')
+                print('PASS actual iris_pca.png data delivered as MCP ImageContent over live HTTPS')
+                # A valid but oversized PNG goes through the legacy signed-link
+                # fallback without embedding binary content.
+                largeimage.write_bytes(b'\x89PNG\r\n\x1a\n'+b'X'*(512*1024+1))
+                large=call(client,bearer,'getFile',{'filename':largeimage.name},modern=True)
+                assert not large['isError']
+                assert not any(x['type']=='image' for x in large['content'])
+                assert large['structuredContent']['openaiFileResponse']
+                print('PASS oversized images remain URL-only')
+            else:
+                raise AssertionError('iris_pca.png required for live inline image integration test')
             only_ping=oauth_grant(client,info,'aishell:ping')
             denied=call(client,only_ping['access_token'],'runCommand',{'command':'id -u'})
             assert denied['isError'] and 'mcp/www_authenticate' in denied.get('_meta',{})
@@ -174,6 +207,8 @@ def main():
                            check=False,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             inputfile.unlink(missing_ok=True)
             outputfile.unlink(missing_ok=True)
+            imagefile.unlink(missing_ok=True)
+            largeimage.unlink(missing_ok=True)
             clean_synthetic_registration()
     print('PASS: public HTTPS live v2 MCP complete')
 
