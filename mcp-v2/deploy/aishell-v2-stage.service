@@ -1,0 +1,23 @@
+[Unit]
+Description=aishell v2 standalone executor STAGING (separate from production)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+RuntimeDirectory=aishell-v2-stage
+RuntimeDirectoryMode=0755
+WorkingDirectory=/opt/aishell-v2
+ExecStart=/usr/bin/python3 /opt/aishell-v2/executor.py --config /etc/aishell-v2/staging.json
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,19 @@
+{
+  "issuer": "https://example.invalid",
+  "resource": "https://example.invalid/mcp",
+  "oauth_database": "/var/lib/aishell-v2/oauth.sqlite3",
+  "socket_path": "/run/aishell-v2/control.sock",
+  "socket_group": "aishell-mcp-test",
+  "permitted_socket_users": ["aishell-mcp-test"],
+  "download_listen_host": "127.0.0.1",
+  "download_listen_port": 8780,
+  "public_download_prefix": "https://example.invalid/mcp-v2/download",
+  "download_signing_key": "/etc/aishell-v2/downloads.key",
+  "principals": {
+    "local-aishell-owner": {
+      "unix_user": "root",
+      "allow_root": true,
+      "allowed_scopes": ["aishell:control", "aishell:files"]
+    }
+  }
+}

@@ -1,0 +1,17 @@
+# Keep production data, credentials, signing keys, and OAuth stores out of git.
+__pycache__/
+*.pyc
+.venv/
+.env
+*.env
+*.key
+*.pem
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+*secret*
+*password*
+config.local.*
+*.tar
+*.tar.gz

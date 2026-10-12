@@ -1,0 +1,33 @@
+[Unit]
+Description=aishell v2 MCP and multi-user OAuth authorization service
+After=network.target aishell-v2.service
+Requires=aishell-v2.service
+
+[Service]
+Type=simple
+User=aishell-mcp-test
+Group=aishell-mcp-test
+WorkingDirectory=/opt/aishell-v2
+Environment=AISHELL_V2_ORIGIN=https://example.invalid
+Environment=AISHELL_V2_OAUTH_DB=/var/lib/aishell-v2/oauth.sqlite3
+Environment=AISHELL_V2_AUTH_USERS=/etc/aishell-v2/auth-users.json
+Environment=AISHELL_V2_EXECUTOR_SOCKET=/run/aishell-v2/control.sock
+ExecStart=/opt/aishell-v2/.venv/bin/uvicorn mcp_shadow:app --host 127.0.0.1 --port 8766 --no-access-log
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/aishell-v2
+ReadOnlyPaths=/etc/aishell-v2/auth-users.json
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+MemoryMax=200M
+
+[Install]
+WantedBy=multi-user.target

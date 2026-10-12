@@ -1,0 +1,10 @@
+{
+  "users": {
+    "owner": {
+      "subject": "local-aishell-owner",
+      "display_name": "Server owner",
+      "password_hash": "REPLACE_WITH_ARGON2ID_HASH",
+      "allowed_scopes": ["aishell:ping", "aishell:control", "aishell:files"]
+    }
+  }
+}
