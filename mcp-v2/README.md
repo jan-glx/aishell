@@ -219,3 +219,17 @@ To verify a new deployment without legacy dependencies, keep `aishell.service` s
 - The original installation includes manual TLS virtual-host integration, OAuth account creation, and plugin registration. It is not a single-command fully unattended deployment.
 
 The hostname `mcp.example.com` is documentation-only. Set `AISHELL_DOMAIN` for installation and `AISHELL_V2_ORIGIN` for standalone runtime or integration testing. Do not commit real deployment domains or secrets.
+
+## Automated Python dependency vulnerability audit
+
+The pinned `requirements.lock` is scanned with [pip-audit](https://github.com/pypa/pip-audit) without installing or executing the application dependencies. The audit tool is installed **separately** from the production venv:
+
+```bash
+python3 -m venv .audit-venv
+.audit-venv/bin/python -m pip install 'pip-audit>=2.10,<3'
+PATH="$PWD/.audit-venv/bin:$PATH" bash mcp-v2/scripts/audit-dependencies.sh
+```
+
+Run these commands from the repository root. The script exits nonzero on known vulnerabilities. It uses `--no-deps` because `requirements.lock` records all dependencies, not just top-level requirements. It does not automatically upgrade production packages or add ignores.
+
+The GitHub Actions workflow `.github/workflows/mcp-pip-audit.yml` runs on relevant pushes/PRs, manual dispatch, and every 6 hours **once merged into the repository default branch**. GitHub scheduled workflows execute from the default branch only; a failure appears in Actions but is not a server-side notification. The audit covers this repository's MCP lockfile, not other Python venvs or Debian packages.
