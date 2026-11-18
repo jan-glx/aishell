@@ -1,0 +1,32 @@
+name: MCP Python dependency audit
+
+on:
+  push:
+    paths:
+      - 'mcp-v2/requirements.lock'
+      - 'mcp-v2/scripts/audit-dependencies.sh'
+      - '.github/workflows/mcp-pip-audit.yml'
+  pull_request:
+    paths:
+      - 'mcp-v2/requirements.lock'
+      - 'mcp-v2/scripts/audit-dependencies.sh'
+      - '.github/workflows/mcp-pip-audit.yml'
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pip-audit
+        run: python -m pip install 'pip-audit>=2.10,<3'
+      - name: Audit locked MCP dependencies
+        run: bash mcp-v2/scripts/audit-dependencies.sh
