@@ -27,6 +27,9 @@ python3 -m venv /opt/aishell-v2/.venv
 /opt/aishell-v2/.venv/bin/python -m pip install -q -r "$BASE/requirements.lock"
 install -m 0644 "$BASE/src/executor.py" /opt/aishell-v2/executor.py
 install -m 0644 "$BASE/src/mcp_shadow.py" /opt/aishell-v2/mcp_shadow.py
+install -m 0644 "$BASE/src/command_history.py" /opt/aishell-v2/command_history.py
+install -m 0644 "$BASE/src/log_viewer.html" /opt/aishell-v2/log_viewer.html
+install -m 0644 "$BASE/src/log_viewer.js" /opt/aishell-v2/log_viewer.js
 
 if [[ ! -e /etc/aishell-v2/downloads.key ]]; then
     /opt/aishell-v2/.venv/bin/python - <<'PY'
@@ -91,17 +94,28 @@ PY
 fi
 
 DBDIR="$(dirname "$OAUTH_DB")"
+if [[ ! -d "$DBDIR" ]]; then
+    install -d -m 0700 -o "$MCP_USER" -g "$MCP_USER" "$DBDIR"
+fi
+if [[ "$(stat -c %U "$DBDIR")" != "$MCP_USER" ]]; then
+    echo "OAuth database directory $DBDIR is not owned by $MCP_USER; review permissions before starting MCP" >&2
+fi
 if [[ "$DBDIR" == '/var/lib/aishell-v2' ]]; then
     chown "$MCP_USER:$MCP_USER" "$DBDIR"
     chmod 0700 "$DBDIR"
 fi
 # Preserve existing OAuth database ownership if migrating active clients.
 if [[ ! -e /etc/systemd/system/aishell-v2.service ]]; then
-    install -m 0644 "$BASE/deploy/aishell-v2.service" /etc/systemd/system/aishell-v2.service
+    sed -e "s@/var/lib/aishell-v2/oauth.sqlite3@${OAUTH_DB}@g" \
+        "$BASE/deploy/aishell-v2.service" > /etc/systemd/system/aishell-v2.service
+    chmod 0644 /etc/systemd/system/aishell-v2.service
 fi
 if [[ ! -e /etc/systemd/system/aishell-v2-mcp.service ]]; then
     sed -e "s@https://example.invalid@https://${AISHELL_DOMAIN}@g" \
         -e "s@/var/lib/aishell-v2/oauth.sqlite3@${OAUTH_DB}@g" \
+        -e "s@ReadWritePaths=/var/lib/aishell-v2@ReadWritePaths=${DBDIR}@g" \
+        -e "s@User=aishell-mcp-test@User=${MCP_USER}@g" \
+        -e "s@Group=aishell-mcp-test@Group=${MCP_USER}@g" \
         "$BASE/deploy/aishell-v2-mcp.service" > /etc/systemd/system/aishell-v2-mcp.service
     chmod 0644 /etc/systemd/system/aishell-v2-mcp.service
 fi

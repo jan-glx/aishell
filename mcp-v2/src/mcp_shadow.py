@@ -1,12 +1,12 @@
-"""aishell v2 OAuth 2.1 MCP server for ChatGPT Plus and multiple Unix users.
+"""Isolated, self-hosted OAuth 2.1 MCP compatibility server for ChatGPT Plus.
 
-Unprivileged public MCP endpoint with dynamic registration, PKCE, per-account
-Argon2 authentication and per-tool OAuth scopes. Privileged tools are carried
-via a private Unix socket to the independent v2 executor; no legacy FastAPI,
-Google OAuth, or legacy API token is needed for MCP execution.
+This service deliberately exposes only the read-only ping_aishell diagnostic.
+It has NO command execution, file transfer, tmux, Google OAuth, or user data
+access. Authentication is entirely separate from the original aishell API.
 
-This module intentionally preserves tested ChatGPT MCP compatibility (2026-07-28
-server/discover, Mixed auth, header normalization and OAuth challenges).
+OAuth uses the official MCP Python SDK's RFC 7591 client registration, RFC 7636
+PKCE authorization code + refresh handling and RFC 9728 resource discovery.
+The resource owner approves access with a dedicated Argon2id-hashed password.
 """
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from starlette.routing import Route
 
 ORIGIN = os.environ.get('AISHELL_V2_ORIGIN', 'https://aishell.gleixner.xyz').rstrip('/')
@@ -89,6 +89,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS codes (id_hash TEXT PRIMARY KEY, data TEXT NOT NULL, expires REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS tokens (id_hash TEXT PRIMARY KEY, kind TEXT NOT NULL, data TEXT NOT NULL, expires REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS failures (ts REAL NOT NULL);
+        CREATE TABLE IF NOT EXISTS web_sessions (id_hash TEXT PRIMARY KEY, subject TEXT NOT NULL, expires REAL NOT NULL);
         ''')
 
 
@@ -98,6 +99,7 @@ def clean(con: sqlite3.Connection):
     con.execute('DELETE FROM codes WHERE expires < ?', (now,))
     con.execute('DELETE FROM tokens WHERE expires < ?', (now,))
     con.execute('DELETE FROM failures WHERE ts < ?', (now - 900,))
+    con.execute('DELETE FROM web_sessions WHERE expires < ?', (now,))
 
 
 def allowed_callback(url: str) -> bool:
@@ -328,12 +330,10 @@ TOOL_SPECS = [
              'content': {'type': 'string', 'maxLength': 24000}},
              'required': ['filename', 'content'], 'additionalProperties': False},
          read_only=False, destructive=True, open_world=False),
-    dict(name='getFile', title='Get aishell output file (image preview inline)', scope=FILES_SCOPE,
-         description=('Return a 5-minute signed HTTPS download URL for a file in your Unix account ~/output. '
-                      'For PNG, JPEG, GIF and WebP files <=512 KiB, ALSO return the actual image as '
-                      'MCP image content for direct ChatGPT visual inspection, without any subsequent URL fetch. '
-                      'For larger images and non-image files, return only the URL. '
-                      'Pass a basename filename without directories.'),
+    dict(name='getFile', title='Get aishell output file', scope=FILES_SCOPE,
+         description=('Return a short-lived signed HTTPS download URL for one file located in '
+                      '~/output on the aishell server. The filename must be a basename '
+                      'without directories. Download links expire in 5 minutes.'),
          schema={'type': 'object', 'properties': {
              'filename': {'type': 'string', 'minLength': 1}},
              'required': ['filename'], 'additionalProperties': False},
@@ -355,11 +355,11 @@ def describe_tools() -> list[types.Tool]:
     ) for t in TOOL_SPECS]
 
 
-def invoke_local_bridge(op: str, arguments: dict, access_token: str) -> dict:
-    # The MCP server owns no root credentials. The root-owned v2 executor trusts
+def invoke_local_bridge(op: str, arguments: dict, access_token: str, web_session: str = '') -> dict:
+    # The server owns no root credentials. The root-owned Unix bridge trusts
     # only this service's Linux UID, checked via SO_PEERCRED. Tool access is
-    # independently authorized by OAuth on both sides of the socket.
-    payload = json.dumps({'op': op, 'arguments': arguments, 'access_token': access_token}, ensure_ascii=False).encode('utf-8') + b'\n'
+    # authorized by OAuth before calling this function.
+    payload = json.dumps({'op': op, 'arguments': arguments, 'access_token': access_token, 'web_session': web_session}, ensure_ascii=False).encode('utf-8') + b'\n'
     if len(payload) > 60_000:
         raise ValueError('Too much tool input (max 60 KB)')
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
@@ -372,8 +372,8 @@ def invoke_local_bridge(op: str, arguments: dict, access_token: str) -> dict:
             if not chunk:
                 break
             reply.extend(chunk)
-            if len(reply) > 1024 * 1024:
-                raise ValueError('Executor response exceeds 1 MiB limit')
+            if len(reply) > 185_000:
+                raise ValueError('Bridge response exceeds limit')
     if not reply.endswith(b'\n'):
         raise RuntimeError('Incomplete privileged bridge response')
     value = json.loads(reply)
@@ -382,7 +382,7 @@ def invoke_local_bridge(op: str, arguments: dict, access_token: str) -> dict:
     return value['result']
 
 mcp = FastMCP(
-    'aishell v2 MCP',
+    'aishell v2 shadow MCP',
     instructions=('Private aishell on the user-owned server. The root command, tmux '
                   'and file-transfer tools require explicit OAuth scopes and owner approval. '
                   'For long commands use a persistent tmux session. Avoid unnecessary destructive operations.'),
@@ -779,21 +779,12 @@ class PublicToolDiscovery:
                         else:
                             async with self.bridge_slots:
                                 data = await asyncio.to_thread(invoke_local_bridge, tool_name, arguments, auth[7:])
-                        # The executor returns the base64 image only for small,
-                        # validated raster files. Exclude it from structured
-                        # metadata and text (to avoid duplicate model context),
-                        # place it in the standard MCP ImageContent field.
-                        image = data.pop('_inline_image', None) if tool_name == 'getFile' else None
-                        content = [{'type': 'text', 'text':
-                                    data['message'] if tool_name == 'ping_aishell'
-                                    else json.dumps(data, ensure_ascii=False)}]
-                        if image is not None:
-                            content.append(types.ImageContent.model_validate(image).model_dump(
-                                mode='json', by_alias=True, exclude_none=True))
                         result = {
                             'isError': False,
                             'structuredContent': data,
-                            'content': content,
+                            'content': [{'type': 'text', 'text':
+                                         data['message'] if tool_name == 'ping_aishell'
+                                         else json.dumps(data, ensure_ascii=False)}],
                         }
                     except Exception as exc:
                         logger.warning('Authorized tool %s failed: %s', tool_name, type(exc).__name__)
@@ -813,7 +804,7 @@ class PublicToolDiscovery:
             result = {
                 'protocolVersion': '2025-06-18',
                 'capabilities': {'tools': {'listChanged': False}},
-                'serverInfo': {'name': 'aishell v2 MCP', 'version': '1.0.0'},
+                'serverInfo': {'name': 'aishell v2 shadow MCP', 'version': '1.0.0'},
                 'instructions': 'Private user-owned aishell. Root shell, tmux and file tools require explicit OAuth permissions and owner approval.',
             }
         elif method == 'server/discover':
@@ -822,7 +813,7 @@ class PublicToolDiscovery:
                 'supportedVersions': ['2026-07-28'],
                 'capabilities': {'tools': {'listChanged': False}},
                 '_meta': {'io.modelcontextprotocol/serverInfo': {
-                    'name': 'aishell v2 MCP', 'version': '1.0.0'}},
+                    'name': 'aishell v2 shadow MCP', 'version': '1.0.0'}},
                 'instructions': 'Private user-owned aishell. Root shell, tmux and file tools require explicit OAuth permissions and owner approval.',
                 'ttlMs': 60000,
                 'cacheScope': 'public',
@@ -881,6 +872,143 @@ class MCPHeaderNormalization:
         amended = dict(scope)
         amended['headers'] = normalized
         await self.downstream(amended, receive, send)
+
+
+# Separate browser login sessions; never reuse ChatGPT OAuth bearer tokens.
+WEB_COOKIE = 'aishell_log_session'
+WEB_CSRF = 'aishell_log_csrf'
+WEB_SESSION_SECONDS = 8 * 3600
+
+
+def web_subject(session: str) -> str | None:
+    if not session or len(session) > 256:
+        return None
+    with db() as con:
+        row = con.execute('SELECT subject,expires FROM web_sessions WHERE id_hash=?',
+                          (token_hash(session),)).fetchone()
+    if not row or row['expires'] <= time.time():
+        return None
+    account = next((x for x in AUTH_USERS.values() if x['subject'] == row['subject']), None)
+    if account is None or CONTROL_SCOPE not in account['allowed_scopes']:
+        return None
+    return row['subject']
+
+
+def browser_headers(response, scripts=False):
+    response = secure_headers(response)
+    if scripts:
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'none'; connect-src 'self'; script-src 'self'; "
+            "style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+    return response
+
+
+@mcp.custom_route('/command-log', methods=['GET'])
+async def browser_log_page(request: Request):
+    session = request.cookies.get(WEB_COOKIE, '')
+    if web_subject(session):
+        page = Path(__file__).with_name('log_viewer.html').read_text()
+        csrf = html.escape(request.cookies.get(WEB_CSRF, ''))
+        page = page.replace('__CSRF_TOKEN__', csrf)
+        return browser_headers(HTMLResponse(page), scripts=True)
+    csrf = secrets.token_urlsafe(32)
+    page = ("<h1>AIShell · command log</h1><p>Sign in with your AIShell account. "
+            "Only commands executed as your own account are visible.</p>"
+            "<form method='post' action='/command-log/login'>"
+            f"<input type='hidden' name='csrf' value='{csrf}'>"
+            "<label>Account<input name='username' autocomplete='username' required></label>"
+            "<label>Password<input type='password' name='password' "
+            "autocomplete='current-password' required></label>"
+            "<button>Sign in</button></form>")
+    resp = browser_headers(HTMLResponse(frame(page)))
+    resp.headers['Referrer-Policy'] = 'same-origin'
+    resp.set_cookie(WEB_CSRF, csrf, secure=True, httponly=True,
+                    samesite='strict', max_age=WEB_SESSION_SECONDS, path='/command-log')
+    return resp
+
+
+@mcp.custom_route('/command-log/login', methods=['POST'])
+async def browser_log_login(request: Request):
+    if request.headers.get('origin') != ORIGIN:
+        return browser_headers(PlainTextResponse('Invalid origin', status_code=403))
+    form = await request.form()
+    csrf = str(form.get('csrf', ''))
+    cookie = request.cookies.get(WEB_CSRF, '')
+    if not csrf or not cookie or not hmac.compare_digest(csrf, cookie):
+        return browser_headers(PlainTextResponse('Invalid login form', status_code=403))
+    username = str(form.get('username', ''))
+    password = str(form.get('password', ''))
+    if len(username) > 50 or len(password) > 256:
+        return browser_headers(PlainTextResponse('Invalid credentials', status_code=403))
+    with db() as con:
+        clean(con)
+        blocked = con.execute('SELECT COUNT(*) FROM failures').fetchone()[0] >= 8
+    if blocked:
+        return browser_headers(PlainTextResponse('Too many attempts', status_code=429))
+    account = AUTH_USERS.get(username)
+    valid = False
+    if account and CONTROL_SCOPE in account['allowed_scopes']:
+        try:
+            valid = PASSWORD_CHECK.verify(account['password_hash'], password)
+        except (VerifyMismatchError, VerificationError):
+            pass
+    if not valid:
+        with db() as con:
+            con.execute('INSERT INTO failures(ts) VALUES (?)', (time.time(),))
+        return browser_headers(PlainTextResponse('Invalid credentials', status_code=403))
+    token = secrets.token_urlsafe(48)
+    with db() as con:
+        con.execute('INSERT INTO web_sessions VALUES (?,?,?)',
+                    (token_hash(token), account['subject'], time.time() + WEB_SESSION_SECONDS))
+        con.execute('DELETE FROM failures')
+    resp = browser_headers(RedirectResponse('/command-log', status_code=303))
+    resp.set_cookie(WEB_COOKIE, token, secure=True, httponly=True,
+                    samesite='strict', max_age=WEB_SESSION_SECONDS, path='/command-log')
+    return resp
+
+
+@mcp.custom_route('/command-log/logout', methods=['POST'])
+async def browser_log_logout(request: Request):
+    if request.headers.get('origin') != ORIGIN:
+        return browser_headers(PlainTextResponse('Invalid origin', status_code=403))
+    form = await request.form()
+    csrf = str(form.get('csrf', ''))
+    cookie = request.cookies.get(WEB_CSRF, '')
+    if not csrf or not cookie or not hmac.compare_digest(csrf, cookie):
+        return browser_headers(PlainTextResponse('Invalid logout form', status_code=403))
+    session = request.cookies.get(WEB_COOKIE, '')
+    if session:
+        with db() as con:
+            con.execute('DELETE FROM web_sessions WHERE id_hash=?', (token_hash(session),))
+    resp = browser_headers(RedirectResponse('/command-log', status_code=303))
+    resp.delete_cookie(WEB_COOKIE, path='/command-log')
+    return resp
+
+
+@mcp.custom_route('/command-log/events', methods=['GET'])
+async def browser_log_events(request: Request):
+    session = request.cookies.get(WEB_COOKIE, '')
+    if not web_subject(session):
+        return browser_headers(JSONResponse({'error': 'Unauthorized'}, status_code=401))
+    try:
+        cursor = request.query_params.get('before_id')
+        before_id = None
+        if cursor is not None:
+            if not cursor.isdecimal() or not 0 < int(cursor) < 2**63:
+                return browser_headers(JSONResponse({'error': 'Invalid cursor'}, status_code=400))
+            before_id = int(cursor)
+        result = await asyncio.to_thread(invoke_local_bridge, 'readCommandLog',
+                                         {'before_id': before_id}, '', session)
+    except Exception as exc:
+        logger.warning('Command log read failed: %s', type(exc).__name__)
+        return browser_headers(JSONResponse({'error': 'Unavailable'}, status_code=503))
+    return browser_headers(JSONResponse(result))
+
+
+@mcp.custom_route('/command-log/viewer.js', methods=['GET'])
+async def browser_log_script(request: Request):
+    return browser_headers(Response(Path(__file__).with_name('log_viewer.js').read_text(),
+                                    media_type='application/javascript'))
 
 
 init_db()

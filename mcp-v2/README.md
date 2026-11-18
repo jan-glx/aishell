@@ -1,6 +1,8 @@
+> **Current deployment baseline (18 November 2026):** Source files in `src/` match the live MCP v2 deployment at `/opt/aishell-v2` on this date. The original October 12 notes below include historical cutover/staging context. A fresh installation is **not** a restoration of OAuth grants or other applications. The legacy FastAPI service is not a prerequisite for MCP v2; it was temporarily stopped for a dependency test on November 18.
+
 # aishell v2 — independent MCP + multi-user executor
 
-**Project state (October 12, 2026): v2 is LIVE at `https://aishell.gleixner.xyz/mcp`.** The intermediate MCP 1.9/bridge services are stopped and disabled. The original legacy OpenAPI/FastAPI backend remains active because other server applications depend on it. The ChatGPT OAuth issuer, URL, registration database, and existing grants were retained.
+**Project state (October 12, 2026): v2 is LIVE at `https://aishell.gleixner.xyz/mcp`.** The intermediate MCP 1.9/bridge services are stopped and disabled. The original legacy OpenAPI/FastAPI backend was retired November 18, 2026 after confirming independent MCP v2 operation; the original October cutover notes below describe its prior state. The ChatGPT OAuth issuer, URL, registration database, and existing grants were retained.
 
 The new implementation has no dependency on the old root FastAPI `aishell.service` or its API token. It is explicitly designed to be installed *alongside* a server that also runs unrelated websites, APIs, mail, and services.
 
@@ -44,7 +46,7 @@ An OAuth *subject* identifies who has authenticated; scopes identify what that p
 
 | Service | Role | Status/cutover |
 | --- | --- | --- |
-| `aishell.service` | Legacy OpenAPI/FastAPI + other applications | **ACTIVE, enabled; preserve** |
+| `aishell.service` | Legacy OpenAPI/FastAPI + other applications | **RETIRED (November 18, 2026); historical status below** |
 | `aishell-v2.service` | Native root-owned multi-user execution service | **ACTIVE, enabled**, Unix socket `/run/aishell-v2/control.sock`, downloads 127.0.0.1:8780 |
 | `aishell-v2-mcp.service` | Native MCP/OAuth frontend, 127.0.0.1:8766 | **ACTIVE, enabled**, public `https://aishell.gleixner.xyz/mcp` |
 | `aishell-mcp-test.service` | **Obsolete MCP 1.9** compatibility/bridge frontend | **STOPPED, disabled; rollback only** |
@@ -188,3 +190,30 @@ The added signed-download nginx route can be left in place during rollback; it h
 ## Host-specific notes
 
 The live server is `aishell.gleixner.xyz` running Debian 12. Production (legacy) MCP still routes through nginx at `/mcp` to 127.0.0.1:8766 and an old root bridge which calls FastAPI 127.0.0.1:8000. The **new** staged MCP was tested at 127.0.0.1:8767, executor Unix `/run/aishell-v2-stage/control.sock`, HTTP downloads 127.0.0.1:8781. New standby executor will use `/run/aishell-v2/control.sock` and 127.0.0.1:8780. No nginx or old API route changes are required just to develop or test v2.
+
+## Rebuilding the live MCP v2 deployment (November 2026)
+
+The tracked repo now contains the deployed executor, MCP frontend, command history persistence, and command-log HTML/JS viewer. `requirements.lock` matches installed packages in `/opt/aishell-v2/.venv` as of the snapshot. The installer stages all five files and generates a new signing key and owner credentials for fresh installations.
+
+1. Use a fresh Debian 12 machine with `python3-venv`, `python3-pip`, `tmux`, `nginx`, TLS certificates and systemd. Verify this service is isolated from unrelated websites and mail applications.
+2. Run `sudo AISHELL_DOMAIN=mcp.example.com bash mcp-v2/scripts/bootstrap.sh` from the repository root (or `scripts/bootstrap.sh` from `mcp-v2/`). This installs files and service templates **without starting or enabling** the services and without modifying Nginx.
+3. Review generated root-only `/etc/aishell-v2/config.json`, OAuth users file, systemd unit properties, and credentials printed **only as filesystem locations**. Add explicitly authorized Unix subjects using `scripts/add_user.py` where necessary.
+4. Review and merge `deploy/nginx-mcp-routes.conf`, `deploy/nginx-mcp-v2-download.conf`, and `deploy/nginx-command-log.conf` **into the existing HTTPS server block**. The snippets are not a complete virtual host. Run `nginx -t` before reloading. Keep HTTP/2 disabled until your distribution supplies a fix for known vulnerabilities.
+5. After reviewing the listener routes and account mapping, `systemctl enable --now aishell-v2.service aishell-v2-mcp.service`. Verify the services, local endpoint, OAuth discovery, and real MCP OAuth authorization.
+6. **Do not migrate existing OAuth data by copying unencrypted databases into Git.** A clean host creates new client registrations and OAuth grants. If preserving grants across hosts, securely migrate the OAuth SQLite database and credential files out of band, with backup and appropriate permissions.
+
+No live credentials, SQLite databases, signing keys, TLS material or logs belong in this repository. CI/unit checks do not exercise a real ChatGPT OAuth callback or a freshly provisioned Debian host. The deployed Nginx virtual host also serves other applications and is intentionally not distributed as a whole.
+
+### Retirement of the legacy FastAPI interface (18 November 2026)
+
+The live MCP v2 endpoint uses only `aishell-v2.service` and `aishell-v2-mcp.service`. The legacy `aishell.service` was disabled and masked; its automatic restart timer was cancelled. Nginx's old catch-all proxy to `127.0.0.1:8000` was replaced by HTTP 404. The legacy `/openapi.yaml` route was removed. Other Nginx locations (MCP, OAuth, `/klangwald/`, static assets, mail, etc.) were preserved. No legacy source code or production data were deleted. This retirement is a host migration, not part of a fresh MCP installation.
+
+To verify a new deployment without legacy dependencies, keep `aishell.service` stopped and run: `systemctl is-active aishell-v2.service aishell-v2-mcp.service`, use the production MCP connector `ping_aishell`, and verify OAuth metadata at `/.well-known/oauth-authorization-server`.
+
+### Reproducibility checks
+
+- Verify `bash -n scripts/bootstrap.sh`, `python3 -m compileall -q src`, and `python3 tests/test_command_history.py` (the latter runs executor tests requiring root on a test host).
+- Check that all files imported by `src/executor.py` are included: `command_history.py`, along with the command-log viewer assets referenced by `src/mcp_shadow.py`.
+- Compare package versions to the pinned `requirements.lock` with `pip freeze`.
+- Integration tests in `tests/test_executor.py`, `tests/test_mcp_shadow.py`, and `tests/test_live_cutover.py` require staging accounts and services; they are *not* unit tests for running indiscriminately against production.
+- The original installation includes manual TLS virtual-host integration, OAuth account creation, and plugin registration. It is not a single-command fully unattended deployment.

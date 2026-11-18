@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIShell · runCommand</title>
+<style>
+:root {color-scheme: dark; font: 15px system-ui,sans-serif; background:#0b0f14;color:#dee6ef}
+body {margin:0;padding:0}
+header {position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:20px;padding:14px 24px;background:#151c25;border-bottom:1px solid #293645;flex-wrap:wrap}
+h1 {font-size:18px;margin:0;font-weight:650;letter-spacing:.02em}
+small,#status {color:#92a3b5;font-size:12px}
+form {margin-left:auto}button {cursor:pointer;background:#202f3f;color:#cbd7e6;border:1px solid #43556c;padding:7px 12px;border-radius:6px}
+main {max-width:1100px;margin:20px auto;padding:0 16px 40px}
+.command {background:#101820;border:1px solid #283744;border-radius:10px;margin:0 0 14px;overflow:hidden;box-shadow:0 2px 12px #0004}
+.meta {padding:8px 14px;background:#1a2530;color:#a8b9c8;font:12px system-ui,sans-serif;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.meta .state {margin-left:auto;color:#7dc5a4}.meta .running {color:#e8c66f}.meta .failure {color:#ff8d91}
+.terminal {padding:14px 16px;font:13px/1.5 'Cascadia Code','DejaVu Sans Mono',Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;tab-size:4;margin:0}
+.prompt {color:#86ca9d;font-weight:600}.cmd {color:#f1f5f9}.stderr {color:#ffa5a5}
+.cut {color:#e8c66f;padding:0 16px 12px;font:12px system-ui,sans-serif}
+.empty {text-align:center;margin-top:15vh;color:#8b9baa}
+a {color:#87bffd}
+</style>
+</head>
+<body>
+<header><h1>AIShell / runCommand</h1><span id="status" role="status">Connecting…</span>
+<small>Latest commands · older history available · live</small>
+<form method="post" action="/command-log/logout"><input type="hidden" name="csrf" value="__CSRF_TOKEN__"><button>Sign out</button></form></header>
+<main><div id="history" aria-label="Recent runCommand activity"><p class="empty">Loading command history…</p></div><button id="older" hidden type="button">Older commands</button></main>
+<script src="/command-log/viewer.js" defer></script>
+</body>
+</html>

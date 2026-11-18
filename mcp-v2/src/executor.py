@@ -4,13 +4,12 @@ The *only* control ingress is a Unix-domain socket. Peers must be an allowed
 local Linux UID AND present an OAuth access token for an administrator-mapped
 subject. Unix identities come from root-owned configuration, never tool args.
 
-One localhost-only HTTP listener serves time-limited HMAC-signed download URLs,
-proxied at /mcp-v2/download/ by the existing shared nginx virtual host.
+One loopback HTTP listener serves time-limited HMAC-signed download URLs; this
+route is NOT installed into production nginx until a separate cutover.
 """
 from __future__ import annotations
 
 import argparse
-import base64
 import hashlib
 import hmac
 import http.client
@@ -37,6 +36,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import parse_qs, quote, unquote, urlsplit, urlencode
+from command_history import CommandHistory
+import codecs
 
 LOG = logging.getLogger('aishell_v2')
 OPERATIONS = {
@@ -50,8 +51,6 @@ OPERATIONS = {
 MAX_FRAME = 100_000
 MAX_FILE_BYTES = 16 * 1024 * 1024
 MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
-MAX_INLINE_IMAGE_BYTES = 512 * 1024
-MAX_SOCKET_RESULT_BYTES = 1024 * 1024
 MAX_COMMAND_BYTES = 12_000
 MAX_COMMAND_SECONDS = 65
 MAX_STDOUT_BYTES = 70_000
@@ -99,6 +98,7 @@ class Configuration:
         self.issuer = data['issuer'].rstrip('/')
         self.resource = data['resource']
         self.oauth_db = Path(data['oauth_database'])
+        self.command_log_database = Path(data.get('command_log_database', '/var/lib/aishell-v2/command_log.sqlite3'))
         self.socket_path = Path(data['socket_path'])
         self.http_host = data.get('download_listen_host', '127.0.0.1')
         self.http_port = int(data.get('download_listen_port', 8780))
@@ -166,6 +166,20 @@ class Configuration:
         return identity
 
 
+    def validate_web_session(self, bearer: str) -> Identity:
+        token = strict_bearer(bearer)
+        digest = hashlib.sha256(token.encode('ascii')).hexdigest()
+        with sqlite3.connect(f'file:{self.oauth_db}?mode=ro', uri=True, timeout=5) as con:
+            row = con.execute('SELECT subject,expires FROM web_sessions WHERE id_hash=?',
+                              (digest,)).fetchone()
+        if row is None or row[1] < time.time():
+            raise PermissionError('Browser session expired or revoked')
+        user = self.identities.get(row[0])
+        if user is None or 'aishell:control' not in user.scopes:
+            raise PermissionError('Browser account has no access to command history')
+        return user
+
+
 def user_env(user: Identity) -> dict[str, str]:
     return {'HOME': str(user.home), 'USER': user.username, 'LOGNAME': user.username,
             'SHELL': '/bin/bash', 'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
@@ -193,7 +207,7 @@ def run_as(user: Identity, argv: list[str], timeout: float = 12) -> subprocess.C
                                            err.decode('utf-8','replace'))
 
 
-def execute_command(user: Identity, args: dict) -> dict:
+def execute_command(user: Identity, args: dict, chunk_sink=None) -> dict:
     command = args.get('command')
     if (not isinstance(command, str) or not command.strip()
             or len(command.encode('utf-8')) > MAX_COMMAND_BYTES):
@@ -202,6 +216,7 @@ def execute_command(user: Identity, args: dict) -> dict:
                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                   stderr=subprocess.PIPE, bufsize=0) as proc:
         chunks = {'stdout': bytearray(), 'stderr': bytearray()}
+        decoders = {name: codecs.getincrementaldecoder('utf-8')('replace') for name in chunks}
         streams = {'stdout': proc.stdout, 'stderr': proc.stderr}
         timed_out = False
         truncated = False
@@ -225,10 +240,15 @@ def execute_command(user: Identity, args: dict) -> dict:
                         continue
                     target = chunks[key.data]
                     if len(target) + len(buf) > MAX_STDOUT_BYTES:
-                        target.extend(buf[:max(0, MAX_STDOUT_BYTES-len(target))])
+                        accepted = buf[:max(0, MAX_STDOUT_BYTES-len(target))]
+                        target.extend(accepted)
+                        if chunk_sink is not None:
+                            chunk_sink(key.data, decoders[key.data].decode(accepted))
                         truncated = True
                         break
                     target.extend(buf)
+                    if chunk_sink is not None:
+                        chunk_sink(key.data, decoders[key.data].decode(buf))
                 if truncated:
                     break
         if timed_out or truncated:
@@ -237,6 +257,11 @@ def execute_command(user: Identity, args: dict) -> dict:
             except ProcessLookupError:
                 pass
         proc.wait(timeout=5)
+        if chunk_sink is not None:
+            for stream, decoder in decoders.items():
+                tail = decoder.decode(b'', final=True)
+                if tail:
+                    chunk_sink(stream, tail)
         return {'stdout': chunks['stdout'].decode('utf-8', 'replace'),
                 'stderr': chunks['stderr'].decode('utf-8', 'replace'),
                 'exit_code': 124 if timed_out else 125 if truncated else proc.returncode,
@@ -362,51 +387,6 @@ def fetch_openai_file(url: str) -> bytes:
         conn.close()
 
 
-def inline_image(user: Identity, filename: str) -> dict | None:
-    """Inline a small, known-safe raster image from the authenticated user's output.
-
-    A bounded binary read avoids filesystem-derived unbounded MCP responses.
-    O_NOFOLLOW, regular-file checks, file extension and magic validation are
-    applied in the root executor, rather than trusting the MCP process.
-    Anything larger/unknown uses the ordinary signed download URL only.
-    """
-    safe_filename(filename)
-    ext = Path(filename).suffix.lower()
-    expected_mime = {
-        '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-        '.gif': 'image/gif', '.webp': 'image/webp',
-    }.get(ext)
-    if expected_mime is None:
-        return None
-    dfd = directory_fd(user, 'output', create=False)
-    try:
-        fd = os.open(filename, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=dfd)
-        try:
-            st = os.fstat(fd)
-            if (not stat.S_ISREG(st.st_mode) or st.st_size <= 0
-                    or st.st_size > MAX_INLINE_IMAGE_BYTES):
-                return None
-            with os.fdopen(fd, 'rb', closefd=False) as inp:
-                data = inp.read(MAX_INLINE_IMAGE_BYTES + 1)
-        finally:
-            os.close(fd)
-    finally:
-        os.close(dfd)
-    if len(data) != st.st_size:
-        raise ValueError('Image changed during bounded read')
-    recognized = (
-        'image/png' if data.startswith(b'\x89PNG\r\n\x1a\n')
-        else 'image/jpeg' if data.startswith(b'\xff\xd8\xff')
-        else 'image/gif' if data.startswith((b'GIF87a', b'GIF89a'))
-        else 'image/webp' if len(data) >= 12 and data[:4] == b'RIFF' and data[8:12] == b'WEBP'
-        else None
-    )
-    if recognized != expected_mime:
-        return None
-    return {'type': 'image', 'mimeType': recognized,
-            'data': base64.b64encode(data).decode('ascii')}
-
-
 def signed_download(config: Configuration, user: Identity, filename: str) -> dict:
     safe_filename(filename)
     dfd = directory_fd(user, 'output', create=False)
@@ -430,11 +410,24 @@ def signed_download(config: Configuration, user: Identity, filename: str) -> dic
             'filename': filename, 'unix_user': user.username}
 
 
-def dispatch(config: Configuration, user: Identity, op: str, arguments: dict) -> dict:
+def dispatch(config: Configuration, user: Identity, op: str, arguments: dict, history: CommandHistory | None = None) -> dict:
     if not isinstance(arguments, dict):
         raise ValueError('Tool arguments must be an object')
     if op == 'runCommand':
-        return execute_command(user, arguments)
+        cmd = arguments.get('command')
+        if not isinstance(cmd, str) or not cmd.strip() or len(cmd.encode('utf-8')) > MAX_COMMAND_BYTES:
+            raise ValueError('Command must be nonempty UTF-8 text <= 12 KB')
+        if history is None:
+            return execute_command(user, arguments)
+        run_id = history.start(user, cmd)  # persist input BEFORE shell process starts
+        try:
+            result = execute_command(user, arguments,
+                chunk_sink=lambda stream, data: history.append(run_id, stream, data))
+        except Exception as exc:
+            history.finish(run_id, None, error=type(exc).__name__)
+            raise
+        history.finish(run_id, result['exit_code'], result['timed_out'], result['truncated'])
+        return result
     if op == 'read_tmux_buffer':
         return tmux_command(user, arguments.get('session', 'default'))
     if op == 'send_tmux_keys':
@@ -457,15 +450,7 @@ def dispatch(config: Configuration, user: Identity, op: str, arguments: dict) ->
             result.append(save_file(user, name, payload))
         return {'files': result}
     if op == 'getFile':
-        filename = arguments.get('filename')
-        data = signed_download(config, user, filename)
-        image = inline_image(user, filename)
-        if image is not None:
-            # Inline bytes are transport-only: the MCP server will move this
-            # object into a genuine MCP ImageContent block and never print base64
-            # as a text or structuredContent value.
-            data['_inline_image'] = image
-        return data
+        return signed_download(config, user, arguments.get('filename'))
     raise PermissionError('Unknown operation')
 
 
@@ -483,15 +468,20 @@ class ExecutorHandler(socketserver.StreamRequestHandler):
                 raise ValueError('Invalid or too-large executor frame')
             request = json.loads(frame)
             op = request.get('op')
-            identity = config.validate(request.get('access_token'), op)
-            LOG.info('Authorized operation=%s principal=%s unix_user=%s', op, identity.subject,
-                     identity.username)
-            result = {'ok': True, 'result': dispatch(config, identity, op, request.get('arguments', {}))}
+            if op == 'readCommandLog':
+                identity = config.validate_web_session(request.get('web_session'))
+                result = {'ok': True, 'result': self.server.history.read(identity.subject, request.get('arguments', {}).get('before_id'))}
+            else:
+                identity = config.validate(request.get('access_token'), op)
+                LOG.info('Authorized operation=%s principal=%s unix_user=%s', op, identity.subject,
+                         identity.username)
+                result = {'ok': True, 'result': dispatch(config, identity, op,
+                          request.get('arguments', {}), self.server.history)}
         except Exception as exc:
             LOG.warning('Operation denied/failed: %s', type(exc).__name__)
             result = {'ok': False, 'error': type(exc).__name__ + ': ' + str(exc)[:350]}
         packed = json.dumps(result, ensure_ascii=False).encode('utf-8') + b'\n'
-        if len(packed) > MAX_SOCKET_RESULT_BYTES:
+        if len(packed) > 185_000:
             packed = b'{"ok":false,"error":"Result too large"}\n'
         self.wfile.write(packed)
 
@@ -557,7 +547,6 @@ class DownloadHandler(http.server.BaseHTTPRequestHandler):
                 self.send_header('Content-Disposition', "attachment; filename*=UTF-8''" + quote(filename, safe=''))
                 self.send_header('Content-Length', str(st.st_size))
                 self.send_header('Cache-Control', 'no-store')
-                self.send_header('Referrer-Policy', 'no-referrer')
                 self.send_header('X-Content-Type-Options', 'nosniff')
                 self.end_headers()
                 if with_body:
@@ -585,6 +574,7 @@ def main():
         raise SystemExit('Executor must run as root to change Unix identity')
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
     cfg = Configuration(args.config)
+    history = CommandHistory(cfg.command_log_database)
     cfg.socket_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         cfg.socket_path.unlink()
@@ -592,6 +582,7 @@ def main():
         pass
     with ThreadedUnixServer(str(cfg.socket_path), ExecutorHandler) as executor:
         executor.config = cfg
+        executor.history = history
         os.chown(cfg.socket_path, 0, grp.getgrnam(cfg.socket_group).gr_gid)
         os.chmod(cfg.socket_path, 0o660)
         with LocalHTTPServer((cfg.http_host, cfg.http_port), DownloadHandler) as http_server:
