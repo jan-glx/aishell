@@ -24,7 +24,11 @@ install -d -m 0750 -o root -g "$MCP_USER" /etc/aishell-v2
 install -d -m 0700 /root/.config/aishell-v2
 install -d -m 0700 /var/lib/aishell-v2
 python3 -m venv /opt/aishell-v2/.venv
-/opt/aishell-v2/.venv/bin/python -m pip install -q -r "$BASE/requirements.lock"
+# Python security advisory: install a hash-verified pip wheel before any other packages.
+# pip 26.2.2 bundles the corrected CA trust bundle (emSign incident, October 2026).
+/opt/aishell-v2/.venv/bin/python -m pip install -q \
+    'pip @ https://files.pythonhosted.org/packages/3f/06/3e4420302363fbb71be3c7f35ce042f54bfca330e3e66b3a2e3c4cca579f/pip-26.2.2-py3-none-any.whl#sha256=fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70'
+/opt/aishell-v2/.venv/bin/python -m pip install -q --require-hashes -r "$BASE/requirements.lock"
 install -m 0644 "$BASE/src/executor.py" /opt/aishell-v2/executor.py
 install -m 0644 "$BASE/src/mcp_shadow.py" /opt/aishell-v2/mcp_shadow.py
 install -m 0644 "$BASE/src/command_history.py" /opt/aishell-v2/command_history.py

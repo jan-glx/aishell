@@ -233,3 +233,17 @@ PATH="$PWD/.audit-venv/bin:$PATH" bash mcp-v2/scripts/audit-dependencies.sh
 Run these commands from the repository root. The script exits nonzero on known vulnerabilities. It uses `--no-deps` because `requirements.lock` records all dependencies, not just top-level requirements. It does not automatically upgrade production packages or add ignores.
 
 The GitHub Actions workflow `.github/workflows/mcp-pip-audit.yml` runs on relevant pushes/PRs, manual dispatch, and every 6 hours **once merged into the repository default branch**. GitHub scheduled workflows execute from the default branch only; a failure appears in Actions but is not a server-side notification. The audit covers this repository's MCP lockfile, not other Python venvs or Debian packages.
+
+### Certificate trust remediation (November 2026)
+
+The eMudhra/emSign certificate-authority incident (`PYSEC-2026-4320`) affects outdated `certifi` trust bundles, including the copy bundled in older pip. The MCP deployment now uses **certifi 2026.10.19** and installs **pip 26.2.2** from the SHA-256-pinned wheel in the official Python security advisory. `requirements.lock` contains per-artifact SHA-256 hashes for every pinned MCP dependency. The bootstrap installs dependencies with `--require-hashes` and fails closed if an artifact does not match a known hash.
+
+To update the lockfile deliberately, edit `requirements.in` (the complete pinned input), use a separate development venv with `pip-tools`, and run:
+
+```bash
+pip-compile --generate-hashes --no-annotate --no-header --resolver=backtracking \
+  --output-file mcp-v2/requirements.lock mcp-v2/requirements.in
+PATH="$PWD/.audit-venv/bin:$PATH" bash mcp-v2/scripts/audit-dependencies.sh
+```
+
+The venv used for generating/auditing dependencies must be separate from production. The CI audit does not verify your operating-system CA store or the Debian-built CPython TLS mitigations; monitor those through Debian security updates.
