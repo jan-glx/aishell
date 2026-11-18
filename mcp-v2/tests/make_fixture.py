@@ -1,6 +1,7 @@
 """Create throwaway OAuth test tokens in STAGING ONLY (never production DB)."""
 import hashlib,json,os,sqlite3,secrets,time,grp
 from pathlib import Path
+ORIGIN=os.environ.get('AISHELL_V2_ORIGIN', 'https://mcp.example.com').rstrip('/')
 p=Path('/var/lib/aishell-v2-stage/oauth.sqlite3')
 assert p.parent==Path('/var/lib/aishell-v2-stage')
 conn=sqlite3.connect(p)
@@ -8,13 +9,13 @@ conn.execute('CREATE TABLE IF NOT EXISTS tokens (id_hash TEXT PRIMARY KEY, kind 
 conn.execute('DELETE FROM tokens')
 credentials={}
 for label,subject,scope,resource in [
- ('owner','test:owner',['aishell:control','aishell:files'],'https://aishell.gleixner.xyz/mcp'),
- ('guest','test:guest',['aishell:control','aishell:files'],'https://aishell.gleixner.xyz/mcp'),
- ('guest_control','test:guest',['aishell:control'],'https://aishell.gleixner.xyz/mcp'),
- ('guest_files','test:guest',['aishell:files'],'https://aishell.gleixner.xyz/mcp'),
+ ('owner','test:owner',['aishell:control','aishell:files'],ORIGIN+'/mcp'),
+ ('guest','test:guest',['aishell:control','aishell:files'],ORIGIN+'/mcp'),
+ ('guest_control','test:guest',['aishell:control'],ORIGIN+'/mcp'),
+ ('guest_files','test:guest',['aishell:files'],ORIGIN+'/mcp'),
  ('guest_wrong_audience','test:guest',['aishell:control'],'https://wrong.example/mcp'),
- ('guest_expired','test:guest',['aishell:control'],'https://aishell.gleixner.xyz/mcp'),
- ('unmapped','test:someone-else',['aishell:control'],'https://aishell.gleixner.xyz/mcp'),
+ ('guest_expired','test:guest',['aishell:control'],ORIGIN+'/mcp'),
+ ('unmapped','test:someone-else',['aishell:control'],ORIGIN+'/mcp'),
 ]:
  token=secrets.token_urlsafe(48)
  expires=time.time()-1 if label=='guest_expired' else time.time()+1800

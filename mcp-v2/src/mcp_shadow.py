@@ -42,7 +42,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from starlette.routing import Route
 
-ORIGIN = os.environ.get('AISHELL_V2_ORIGIN', 'https://aishell.gleixner.xyz').rstrip('/')
+ORIGIN = os.environ.get('AISHELL_V2_ORIGIN', 'https://mcp.example.com').rstrip('/')  # override for deployment
 RESOURCE = ORIGIN + '/mcp'
 SCOPE = 'aishell:ping'
 CONTROL_SCOPE = 'aishell:control'
@@ -502,7 +502,7 @@ async def consent(request: Request):
         # same-origin HTML form by sending Origin: null. This broke our strict
         # POST Origin check. The 'origin' policy sends only our scheme/host,
         # never the consent URL's secret ticket query parameter, and produces
-        # Origin: https://aishell.gleixner.xyz on Firefox form submissions.
+        # Origin: https://mcp.example.com on Firefox form submissions.
         # Keep no-referrer on OAuth redirects / token responses.
         resp.headers['Referrer-Policy'] = 'origin'
         resp.set_cookie('aishell_oauth_csrf', record['csrf'], secure=True, httponly=True,

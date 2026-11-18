@@ -28,7 +28,7 @@ def action(op,args=None,who='guest', expected=True):
 
 def download(url):
  u=urlsplit(url)
- assert u.scheme=='https' and u.netloc=='aishell.gleixner.xyz'
+ assert u.scheme=='https' and u.netloc==urlsplit(os.environ.get('AISHELL_V2_ORIGIN', 'https://mcp.example.com')).netloc
  conn=http.client.HTTPConnection('127.0.0.1',8781,timeout=8)
  conn.request('GET',u.path+'?'+u.query)
  resp=conn.getresponse()

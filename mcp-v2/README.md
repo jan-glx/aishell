@@ -2,7 +2,7 @@
 
 # aishell v2 — independent MCP + multi-user executor
 
-**Project state (October 12, 2026): v2 is LIVE at `https://aishell.gleixner.xyz/mcp`.** The intermediate MCP 1.9/bridge services are stopped and disabled. The original legacy OpenAPI/FastAPI backend was retired November 18, 2026 after confirming independent MCP v2 operation; the original October cutover notes below describe its prior state. The ChatGPT OAuth issuer, URL, registration database, and existing grants were retained.
+**Project state (October 12, 2026): v2 was deployed at the configured MCP domain (shown here as `https://mcp.example.com/mcp`).** The intermediate MCP 1.9/bridge services are stopped and disabled. The original legacy OpenAPI/FastAPI backend was retired November 18, 2026 after confirming independent MCP v2 operation; the original October cutover notes below describe its prior state. The ChatGPT OAuth issuer, URL, registration database, and existing grants were retained.
 
 The new implementation has no dependency on the old root FastAPI `aishell.service` or its API token. It is explicitly designed to be installed *alongside* a server that also runs unrelated websites, APIs, mail, and services.
 
@@ -48,7 +48,7 @@ An OAuth *subject* identifies who has authenticated; scopes identify what that p
 | --- | --- | --- |
 | `aishell.service` | Legacy OpenAPI/FastAPI + other applications | **RETIRED (November 18, 2026); historical status below** |
 | `aishell-v2.service` | Native root-owned multi-user execution service | **ACTIVE, enabled**, Unix socket `/run/aishell-v2/control.sock`, downloads 127.0.0.1:8780 |
-| `aishell-v2-mcp.service` | Native MCP/OAuth frontend, 127.0.0.1:8766 | **ACTIVE, enabled**, public `https://aishell.gleixner.xyz/mcp` |
+| `aishell-v2-mcp.service` | Native MCP/OAuth frontend, 127.0.0.1:8766 | **ACTIVE, enabled**, public `https://mcp.example.com/mcp` |
 | `aishell-mcp-test.service` | **Obsolete MCP 1.9** compatibility/bridge frontend | **STOPPED, disabled; rollback only** |
 | `aishell-mcp-bridge.service` | **Obsolete MCP 1.9** root bridge to FastAPI | **STOPPED, disabled; rollback only** |
 | `aishell-v2-stage.service` | Isolated staging executor | STOPPED (tests only) |
@@ -158,7 +158,7 @@ The completed steps were:
 
 1. Made root-only backups of the MCP 1.9 systemd units, original nginx site, live SQLite OAuth database (online consistent SQLite backup), executor config and new auth-users mapping. Recovery directory under `/root/wd/aishell-v2-rollbacks/`, current location recorded in `/root/wd/aishell-v2-rollbacks/LATEST`. **Do not commit or distribute that directory; it contains OAuth grants and password hashes.**
 2. Created `/etc/aishell-v2/auth-users.json`, binding `owner` to the same `local-aishell-owner` subject and verified Argon2id password hash. Maintained `/etc/aishell-v2/config.json` root-only Unix UID mapping (`local-aishell-owner` → root).
-3. Configured `/etc/systemd/system/aishell-v2-mcp.service` using `AISHELL_V2_ORIGIN=https://aishell.gleixner.xyz`, the **existing** OAuth database `/var/lib/aishell-mcp-test/oauth.sqlite3`, and `/run/aishell-v2/control.sock` for root execution; no legacy FastAPI API token.
+3. Configured `/etc/systemd/system/aishell-v2-mcp.service` using `AISHELL_V2_ORIGIN=https://mcp.example.com`, the **existing** OAuth database `/var/lib/aishell-mcp-test/oauth.sqlite3`, and `/run/aishell-v2/control.sock` for root execution; no legacy FastAPI API token.
 4. Tested existing ChatGPT DCR client registration loading in v2 from a backup copy of the real OAuth database.
 5. Added ONLY nginx `location ^~ /mcp-v2/download/` to proxy signed output downloads to the root-owned localhost listener 127.0.0.1:8780, with `access_log off`. Verified HTTPS signed-download success and tampered-signature rejection.
 6. Stopped `aishell-mcp-test.service`, started `aishell-v2-mcp.service` on the **same port 8766**, and kept `aishell.service` running.
@@ -172,8 +172,8 @@ The completed steps were:
 sudo systemctl stop aishell-v2-mcp.service
 sudo systemctl enable --now aishell-mcp-bridge.service aishell-mcp-test.service
 # Verify:
-curl -fsS https://aishell.gleixner.xyz/.well-known/oauth-authorization-server >/dev/null
-curl -fsS https://aishell.gleixner.xyz/openapi.json >/dev/null
+curl -fsS https://mcp.example.com/.well-known/oauth-authorization-server >/dev/null
+# Historical legacy FastAPI check (retired; no longer expected to respond).
 ```
 
 The added signed-download nginx route can be left in place during rollback; it has no effect on legacy routes. If nginx config itself must be restored, use the backed-up *MCP site configuration only* after checking it against later unrelated changes, then run `nginx -t && systemctl reload nginx`. **Do not roll back or delete the live OAuth database unless corruption is confirmed**: v2 and 1.9 use the same DB schema and preserving new tokens/refresh grants avoids unnecessary user reauthorization. Never replace the entire server configuration with a stale snapshot.
@@ -189,7 +189,7 @@ The added signed-download nginx route can be left in place during rollback; it h
 
 ## Host-specific notes
 
-The live server is `aishell.gleixner.xyz` running Debian 12. Production (legacy) MCP still routes through nginx at `/mcp` to 127.0.0.1:8766 and an old root bridge which calls FastAPI 127.0.0.1:8000. The **new** staged MCP was tested at 127.0.0.1:8767, executor Unix `/run/aishell-v2-stage/control.sock`, HTTP downloads 127.0.0.1:8781. New standby executor will use `/run/aishell-v2/control.sock` and 127.0.0.1:8780. No nginx or old API route changes are required just to develop or test v2.
+The original deployment ran on Debian 12; its hostname is represented here by `mcp.example.com`. Production (legacy) MCP still routes through nginx at `/mcp` to 127.0.0.1:8766 and an old root bridge which calls FastAPI 127.0.0.1:8000. The **new** staged MCP was tested at 127.0.0.1:8767, executor Unix `/run/aishell-v2-stage/control.sock`, HTTP downloads 127.0.0.1:8781. New standby executor will use `/run/aishell-v2/control.sock` and 127.0.0.1:8780. No nginx or old API route changes are required just to develop or test v2.
 
 ## Rebuilding the live MCP v2 deployment (November 2026)
 
@@ -217,3 +217,5 @@ To verify a new deployment without legacy dependencies, keep `aishell.service` s
 - Compare package versions to the pinned `requirements.lock` with `pip freeze`.
 - Integration tests in `tests/test_executor.py`, `tests/test_mcp_shadow.py`, and `tests/test_live_cutover.py` require staging accounts and services; they are *not* unit tests for running indiscriminately against production.
 - The original installation includes manual TLS virtual-host integration, OAuth account creation, and plugin registration. It is not a single-command fully unattended deployment.
+
+The hostname `mcp.example.com` is documentation-only. Set `AISHELL_DOMAIN` for installation and `AISHELL_V2_ORIGIN` for standalone runtime or integration testing. Do not commit real deployment domains or secrets.

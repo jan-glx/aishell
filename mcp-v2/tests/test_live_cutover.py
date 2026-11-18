@@ -22,7 +22,7 @@ from urllib.parse import parse_qs,urlsplit
 
 import httpx
 
-BASE='https://aishell.gleixner.xyz'
+BASE=os.environ.get('AISHELL_V2_ORIGIN', 'https://mcp.example.com').rstrip('/')
 RESOURCE=BASE+'/mcp'
 REDIRECT='https://chatgpt.com/connector_platform_oauth_redirect'
 DB='/var/lib/aishell-mcp-test/oauth.sqlite3'
@@ -47,7 +47,7 @@ def oauth_grant(client: httpx.Client,clientinfo:dict,scope:str) -> dict:
         'code_challenge_method':'S256','resource':RESOURCE,
     }),302,'Authorization redirect')
     target=urlsplit(r.headers['location'])
-    assert target.netloc=='aishell.gleixner.xyz' and target.path=='/oauth/consent'
+    assert target.netloc==urlsplit(BASE).netloc and target.path=='/oauth/consent'
     ticket=parse_qs(target.query)['ticket'][0]
     consent=expect(client.get(BASE+'/oauth/consent',params={'ticket':ticket}),200,'OAuth owner consent')
     assert consent.headers.get('referrer-policy')=='origin'

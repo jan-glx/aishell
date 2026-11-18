@@ -1,12 +1,12 @@
 
-# aishell: a shell for your AI   $~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~$   ![Aishell Logo](https://aishell.gleixner.xyz/static/favicon.svg) 
+# aishell: a shell for your AI   $~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~$
 _**aishell** does not add AI to your shell. **aishell** provides your AI root shell access to a dedicated server._
 
 **Run a persistent Linux server under AI’s control, with full root access, programmable APIs, and a transparent, inspectable environment. Perfect for developers, tinkerers, and AI agents that need more than a browser and a sandbox.**
 
 
 
-This project provides a simple FastAPI server that exposes a few endpoints to be called from OpenAI's ChatGPT, essentially turning the chatbot into a powerfull agent. 
+This project provides a simple FastAPI server that exposes a few endpoints to be called from OpenAI's ChatGPT, essentially turning the chatbot into a powerfull agent.
 In particular there are endpoints to execute commands within a temporary shell or arbitrary keystrokes within a persistent tmux session and to up- and download files.
 The user can follow the agent's actions by joing the tmux session over ssh or by observing a log of api calls at /static/api_log.html .
 This enables endless use cases and should be the only plugin/MPC you ever need.
@@ -19,7 +19,7 @@ A root-access Linux server and a domain pointing to it.
 
 You have two main setup options:
 
--  [jan-glx/aishell-setup](https://github.com/jan-glx/aishell-setup):  
+-  [jan-glx/aishell-setup](https://github.com/jan-glx/aishell-setup):
   A Terraform module to deploy **aishell** on Amazon EC2 — includes support for **hibernation** to reduce idle-time costs.
 
 -  Alternatively, a simple shared VM (e.g. Hetzner CX or CPX) often provides better price/performance and sufficient persistence for most use cases.

@@ -4,12 +4,12 @@ Registration, password login, short-lived tokens, privileged calls and revocatio
 are conducted against isolated staging services only (127.0.0.1:8767,8781).
 No production OAuth clients, files, tokens, or nginx routes are changed.
 """
-import base64, hashlib, httpx, json, re, secrets
+import base64, hashlib, httpx, json, os, re, secrets
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 BASE = 'http://127.0.0.1:8767'
-PUBLIC = 'https://aishell.gleixner.xyz'
+PUBLIC = os.environ.get('AISHELL_V2_ORIGIN', 'https://mcp.example.com').rstrip('/')
 REDIRECT = 'https://chatgpt.com/connector_platform_oauth_redirect'
 HEADERS = {'Content-Type':'application/json','Accept':'application/json, text/event-stream'}
 
@@ -37,7 +37,7 @@ def authorize(c, client, scopes, username='owner'):
         'code_challenge_method':'S256','resource':PUBLIC+'/mcp',
     }),302,'Authorization initiation')
     url=urlsplit(result.headers['location'])
-    assert url.hostname=='aishell.gleixner.xyz' and url.path=='/oauth/consent'
+    assert url.netloc==urlsplit(PUBLIC).netloc and url.path=='/oauth/consent'
     ticket=parse_qs(url.query)['ticket'][0]
     html=expect_response(c.get(BASE+'/oauth/consent',params={'ticket':ticket}),200,'Consent form')
     csrf=re.search(r'name="csrf" value="([^"]+)"',html.text).group(1)
@@ -93,7 +93,7 @@ def main():
             signed=call_tool(c,token,'getFile',{'filename':filename})
             assert not signed['isError'],signed
             url=urlsplit(signed['structuredContent']['openaiFileResponse'][0])
-            assert url.hostname=='aishell.gleixner.xyz' and url.path.startswith('/mcp-v2/download/')
+            assert url.netloc==urlsplit(PUBLIC).netloc and url.path.startswith('/mcp-v2/download/')
             fetched=expect_response(c.get('http://127.0.0.1:8781'+url.path+'?'+url.query),200,'v2 signed download')
             assert fetched.content==b'v2-shadow-export'
             print('PASS OAuth → MCP → v2 file write + signed read')
